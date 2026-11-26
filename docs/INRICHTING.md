@@ -89,5 +89,9 @@ Dit loopt SSH, firewall, WireGuard, de verbinding met de andere server, Docker e
 
 ## Daarna
 
-- **DNS:** voor Caddy op dfc zijn namen nodig (bijvoorbeeld `dagster.`, `metadata.`, `trino.`, `portaal.`, `id.` onder één domein), allemaal naar 207.180.253.52. dfw krijgt geen publieke naam.
+- **DNS:** het domein is `datafundament.haarlem.dev`. Twee A-records, beide naar 207.180.253.52 (dfc):
+  - `datafundament.haarlem.dev`
+  - `*.datafundament.haarlem.dev`
+
+  Caddy haalt per naam een certificaat op. De namen: `datafundament.` (startpagina, later het portaal), `dagster.`, `metadata.` (OpenMetadata), `catalogus.` (Lakekeeper), `trino.` en `id.` (Keycloak). dfw krijgt geen publieke naam.
 - **Software:** de compose-bestanden voor dfc (`kern`, `metadata`, `portaal`) en dfw (de bron) volgen, met een script dat ze installeert en bijwerkt.
