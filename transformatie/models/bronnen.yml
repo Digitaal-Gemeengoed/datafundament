@@ -1,0 +1,30 @@
+version: 2
+
+# De ruwe laag in Iceberg, gevuld door dlt (ingestie/). De namen zijn ook de
+# asset-sleutels in Dagster, zodat de lineage doorloopt.
+sources:
+  - name: ruw_brp
+    database: lakehouse
+    schema: ruw_brp
+    description: Insert-only; elke versie van elke rij uit de bron (DF-ADR-005).
+    tables:
+      - name: verblijfplaats
+
+  - name: ruw_brp_stand
+    database: lakehouse
+    schema: ruw_brp_stand
+    description: De huidige stand van de bron (upsert op id).
+    tables:
+      - name: persoonslijst
+      - name: persoon
+      - name: overlijden
+      - name: verblijfplaats
+      - name: codetabel
+
+  - name: ruw_pdok
+    database: lakehouse
+    schema: ruw_pdok
+    description: Geodata van PDOK (Locatieserver, CBS Wijken en Buurten 2025).
+    tables:
+      - name: adres_locatie
+      - name: cbs_buurten

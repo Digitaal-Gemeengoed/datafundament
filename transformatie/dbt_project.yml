@@ -1,0 +1,20 @@
+# dbt: van de ruwe laag naar de uniforme laag en dataproducten (DF-ADR-001, DF-ADR-004).
+# DuckDB rekent; de tabellen staan in Iceberg (Lakekeeper) of in PostGIS (dwh).
+name: datafundament
+version: "0.1.0"
+profile: datafundament
+config-version: 2
+
+model-paths: ["models"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+
+models:
+  datafundament:
+    # In Iceberg: de eigen materialisatie (zie macros/iceberg_tabel.sql).
+    +database: lakehouse
+    +materialized: iceberg_tabel
+    uniform:
+      +schema: uniform
+    dataproduct:
+      +schema: dataproduct

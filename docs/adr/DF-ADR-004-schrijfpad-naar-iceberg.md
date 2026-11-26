@@ -52,3 +52,11 @@ Gebruikte versies, die we vastpinnen:
 | DuckDB | 2.0.1 |
 
 **Gevolg:** de terugval op dbt-trino is voorlopig niet nodig. Nog te bewijzen: hetzelfde pad met dbt-duckdb ertussen, en schrijven vanuit dlt.
+
+## Aanvulling (26 november 2026): dbt op Iceberg
+
+- DuckDB ondersteunt op Iceberg `CREATE TABLE … AS SELECT`, `DROP TABLE` en het hernoemen van tabellen, maar geen views. Alle dbt-modellen in het lakehouse zijn daarom tabellen.
+- dbt gebruikt een **eigen materialisatie** (`transformatie/macros/iceberg_tabel.sql`): de tabel één keer maken, daarna elke run legen en opnieuw vullen (`DELETE` en `INSERT … BY NAME`). De tabel blijft zo bestaan voor Trino, en Iceberg houdt per run een snapshot: time travel op de uniforme laag. Bij een andere set kolommen: `dbt build --full-refresh`.
+- De standaard-materialisatie van dbt-duckdb (tijdelijke tabel, hernoemen, verwijderen) gebruiken we op Iceberg niet. Hij zou kunnen werken, maar is niet getest en lastiger uit te leggen.
+- Dataproducten in PostGIS gebruiken wel de standaard-materialisatie, met daarna een geometriekolom, een sleutel en een ruimtelijke index.
+- Lokaal getest met DuckDB en de echte testdata: de modellen `persoon` en `verblijfplaats_historie`, twee runs na elkaar (eerst aanmaken, daarna legen en vullen). De tijdlijn van een nagebootste verhuizing klopt.
