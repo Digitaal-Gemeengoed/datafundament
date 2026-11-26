@@ -31,6 +31,7 @@ Het WireGuard-netwerk 10.67.0.0/24 is bewust anders dan dat van de Office Assist
 
 - **Netwerk:** de twee servers praten via het private netwerk van de provider, met **WireGuard** daarover. Het private netwerk houdt het verkeer van het internet af; WireGuard versleutelt het en maakt ons onafhankelijk van de provider (zoals bij de Office Assistent). De poort van PostgreSQL op de bron luistert alleen op het WireGuard-adres, en de firewall laat alleen de platformserver toe. Docker gaat langs ufw heen; daarom een filter per poort, zoals `docker-filter.sh` in `oa-uitrol`.
 - **Docker Compose met profielen** op het platform: `kern`, `metadata`, `portaal`. Op de bron een eigen, kleine compose.
+- **Domein:** `datafundament.haarlem.dev`, met een wildcard-record `*.datafundament.haarlem.dev`, beide naar dfc.
 - **Caddy** op het platform voor TLS en als enige ingang. Van buiten bereikbaar zijn alleen de schermen en Trino, en zolang het een PoC is alleen met wachtwoord of via Keycloak. Dagster heeft in de open-source versie geen eigen inlog en komt achter oauth2-proxy. De bron is van buiten niet bereikbaar, behalve SSH.
 - **Uitrol zoals in het gemeenschapsplatform:** elke server haalt zelf op uit GitHub, met een systemd-timer, en GitHub komt er niet in. Versies van images worden vastgepind in `compose/`.
 - **Lokaal:** `kern` en de bron draaien ook samen op een laptop, voor ontwikkelen zonder server.

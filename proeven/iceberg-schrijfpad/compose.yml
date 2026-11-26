@@ -1,0 +1,78 @@
+# Proef DF-ADR-004: schrijven naar Iceberg met DuckDB, via Lakekeeper, op Garage;
+# daarna lezen met Trino. Een losse opstelling, geen onderdeel van de uitrol.
+# Niets wordt gepubliceerd: alles praat binnen dit compose-netwerk.
+#
+# Starten en testen: ./proef.sh      Opruimen: ./proef.sh opruimen
+
+name: df-proef-schrijfpad
+
+services:
+  garage:
+    image: dxflrs/garage:${GARAGE_VERSIE:-v2.5.0}
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_GEHEIM:?}
+      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_SLEUTEL:?}
+      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_GEHEIM:?}
+      GARAGE_DEFAULT_BUCKET: lakehouse
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garagemeta:/var/lib/garage/meta
+      - garagedata:/var/lib/garage/data
+
+  catalogus-db:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: lakekeeper
+      POSTGRES_PASSWORD: ${LK_DB_WACHTWOORD:?}
+      POSTGRES_DB: lakekeeper
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lakekeeper -d lakekeeper"]
+      interval: 3s
+      retries: 20
+    volumes:
+      - catalogusdb:/var/lib/postgresql/data
+
+  lakekeeper-migratie:
+    image: vakamo/lakekeeper:${LAKEKEEPER_VERSIE:-latest}
+    command: ["migrate"]
+    environment: &lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lakekeeper:${LK_DB_WACHTWOORD}@catalogus-db:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lakekeeper:${LK_DB_WACHTWOORD}@catalogus-db:5432/lakekeeper
+      LAKEKEEPER__PG_ENCRYPTION_KEY: ${LK_SLEUTEL:?}
+      LAKEKEEPER__AUTHZ_BACKEND: allowall
+    depends_on:
+      catalogus-db: { condition: service_healthy }
+
+  lakekeeper:
+    image: vakamo/lakekeeper:${LAKEKEEPER_VERSIE:-latest}
+    command: ["serve"]
+    environment: *lakekeeper
+    depends_on:
+      lakekeeper-migratie: { condition: service_completed_successfully }
+      garage: { condition: service_started }
+
+  trino:
+    image: trinodb/trino:${TRINO_VERSIE:-latest}
+    environment:
+      GARAGE_SLEUTEL: ${GARAGE_SLEUTEL}
+      GARAGE_GEHEIM: ${GARAGE_GEHEIM}
+    volumes:
+      - ./trino/catalog/lakehouse.properties:/etc/trino/catalog/lakehouse.properties:ro
+    depends_on: [lakekeeper]
+
+  # DuckDB en de teststappen, in Python.
+  proef:
+    image: python:3.13-slim
+    command: ["sh", "-c", "pip install -q --root-user-action=ignore duckdb requests && touch /tmp/klaar && sleep infinity"]
+    environment:
+      GARAGE_SLEUTEL: ${GARAGE_SLEUTEL}
+      GARAGE_GEHEIM: ${GARAGE_GEHEIM}
+    volumes:
+      - ./proef.py:/proef.py:ro
+    depends_on: [lakekeeper]
+
+volumes:
+  garagemeta:
+  garagedata:
+  catalogusdb:

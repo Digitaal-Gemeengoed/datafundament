@@ -33,3 +33,22 @@ Dit is het grootste technische risico van de stack.
 
 - **PyIceberg vanuit Python:** werkt, maar dan staat de transformatielogica in Python in plaats van in dbt-SQL.
 - **Wachten op Iceberg v3-geometrie** in alle engines: niet binnen de looptijd van de PoC.
+
+## Uitkomst van de proef (26 november 2026)
+
+De proef in [`proeven/iceberg-schrijfpad`](../../proeven/iceberg-schrijfpad/README.md) is op dfc **geheel geslaagd**:
+
+- Lakekeeper maakte het warehouse op Garage aan, zonder STS en zonder remote signing, en controleerde zelf of schrijven en lezen werkten.
+- DuckDB maakte een tabel en voerde invoegen (met geometrie als WKB), `UPDATE`, `DELETE`, `MERGE INTO`, een nieuwe kolom en weer invoegen uit. Het resultaat klopte, met 5 snapshots.
+- Trino las dezelfde tabel terug: met de wijzigingen van DuckDB (ook de verwijderingen als *positional deletes*), de nieuwe kolom, de geometrie uit WKB en de snapshots.
+
+Gebruikte versies, die we vastpinnen:
+
+| Onderdeel | Versie |
+|---|---|
+| Garage | `dxflrs/garage:v2.5.0` |
+| Lakekeeper | 0.13.9 (`vakamo/lakekeeper@sha256:e5a0e9d3ffecf0c09b2c0bcd2258e9adc2274bf88c1127b2ca08ea02966b5f48`) |
+| Trino | 484 (`trinodb/trino@sha256:2704eb53935af5e582d63d6033e9bf99d20c325e9b0e30b1016ef59a4773979f`) |
+| DuckDB | 2.0.1 |
+
+**Gevolg:** de terugval op dbt-trino is voorlopig niet nodig. Nog te bewijzen: hetzelfde pad met dbt-duckdb ertussen, en schrijven vanuit dlt.
