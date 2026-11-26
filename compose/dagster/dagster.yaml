@@ -1,0 +1,28 @@
+# Dagster: opslag in PostgreSQL (database dagster op db).
+storage:
+  postgres:
+    postgres_db:
+      username:
+        env: DAGSTER_PG_USER
+      password:
+        env: DAGSTER_PG_PASSWORD
+      hostname: db
+      db_name: dagster
+      port: 5432
+
+# Eén run tegelijk: twee ingestieruns naast elkaar zouden elkaars staat van dlt raken.
+run_coordinator:
+  module: dagster._core.run_coordinator
+  class: QueuedRunCoordinator
+  config:
+    max_concurrent_runs: 1
+
+# Logboeken van runs op een volume dat webserver, daemon en code delen.
+compute_logs:
+  module: dagster._core.storage.local_compute_log_manager
+  class: LocalComputeLogManager
+  config:
+    base_dir: /opt/dagster/home/storage/logs
+
+telemetry:
+  enabled: false

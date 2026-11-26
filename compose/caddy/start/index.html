@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Datafundament — PoC</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 46rem; margin: 3rem auto; padding: 0 1rem; color: #1a1a1a; }
+  h1 { font-size: 1.6rem; margin-bottom: .2rem; }
+  p.sub { color: #555; margin-top: 0; }
+  ul { list-style: none; padding: 0; }
+  li { border: 1px solid #ddd; border-radius: 6px; padding: .8rem 1rem; margin: .6rem 0; }
+  a { color: #14478f; font-weight: 600; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  small { color: #555; display: block; }
+  code { background: #f2f2f2; padding: 0 .3rem; border-radius: 3px; }
+</style>
+</head>
+<body>
+<h1>Datafundament</h1>
+<p class="sub">Proof of concept: een open-source data lakehouse voor gemeenten. Digitaal Gemeengoed.</p>
+<ul>
+  <li><a href="https://dagster.datafundament.haarlem.dev/">Dagster</a>
+    <small>De regisseur: de keten van bron tot dataproduct, runs, schema's en lineage.</small></li>
+  <li><a href="https://catalogus.datafundament.haarlem.dev/ui/">Lakekeeper</a>
+    <small>De Iceberg-catalogus: namespaces, tabellen, snapshots.</small></li>
+  <li><a href="https://trino.datafundament.haarlem.dev/ui/">Trino</a>
+    <small>De voordeur voor afnemers. JDBC: <code>jdbc:trino://trino.datafundament.haarlem.dev:443?SSL=true</code>, met het wachtwoord van deze site.</small></li>
+</ul>
+<p><small>Testdata: fictieve personen uit vrijBRP (RvIG, GBA-V, Procura; EUPL-1.2). Geen echte persoonsgegevens.</small></p>
+</body>
+</html>
