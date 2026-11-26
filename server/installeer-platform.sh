@@ -24,10 +24,14 @@ vul_aan() {  # NAAM WAARDE: alleen als NAAM nog niet in .env staat
 meld "Instellingen en geheimen ($DF_REPO/compose/.env)"
 umask 077; touch "$ENV"; umask 022; chmod 600 "$ENV"
 vul_aan DOMEIN datafundament.haarlem.dev
-for n in DB_WACHTWOORD LK_DB_WACHTWOORD DAGSTER_DB_WACHTWOORD DWH_SCHRIJVER_WACHTWOORD DWH_LEZER_WACHTWOORD; do
+for n in DB_WACHTWOORD LK_DB_WACHTWOORD DAGSTER_DB_WACHTWOORD DWH_SCHRIJVER_WACHTWOORD DWH_LEZER_WACHTWOORD \
+         KC_DB_WACHTWOORD KC_BEHEERDER_WACHTWOORD PORTAAL_DB_WACHTWOORD PORTAAL_APP_WACHTWOORD KLUIS_DB_WACHTWOORD; do
   vul_aan "$n" "$(geheim 24)"
 done
 vul_aan LK_SLEUTEL "$(geheim 32)"
+vul_aan PORTAAL_ADMIN_GEHEIM "$(geheim 32)"
+# De sleutel van de kluis (DF-ADR-015): HMAC van het BSN, gedeeld door ingestie en portaal.
+vul_aan KLUIS_GEHEIM "$(geheim 32)"
 vul_aan GARAGE_RPC_GEHEIM "$(geheim 32)"
 for k in BEHEER LAKEKEEPER SCHRIJVER LEZER LANDING; do
   vul_aan "GARAGE_${k}_SLEUTEL" "GK$(geheim 12)"
@@ -73,8 +77,8 @@ else
 fi
 
 meld "Images ophalen en de code bouwen (eerste keer: een paar minuten)"
-docker compose build -q werk
-docker compose pull -q --ignore-buildable db garage lakekeeper lakekeeper-migratie trino caddy
+docker compose build -q werk portaal-migreer
+docker compose pull -q --ignore-buildable db garage lakekeeper lakekeeper-migratie trino caddy keycloak
 ok "Klaar"
 
 meld "Database en opslag"
@@ -83,6 +87,27 @@ for _ in $(seq 1 30); do
   docker compose exec -T garage /garage status >/dev/null 2>&1 && break
   sleep 2
 done
+# Databases die later bijkwamen (Keycloak, portaal, kluis): ook in een bestaande installatie.
+psql_beheer() { docker compose exec -T db psql -v ON_ERROR_STOP=1 -U beheer -d postgres -q "$@"; }
+rol() {  # ROL WACHTWOORD: aanmaken als hij er niet is; het wachtwoord altijd zetten
+  psql_beheer -v rol="$1" -v ww="$2" <<'EOSQL'
+SELECT format('CREATE ROLE %I LOGIN', :'rol') WHERE NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = :'rol') \gexec
+SELECT format('ALTER ROLE %I PASSWORD %L', :'rol', :'ww') \gexec
+EOSQL
+}
+database() {  # DATABASE EIGENAAR
+  psql_beheer -v db="$1" -v rol="$2" <<'EOSQL'
+SELECT format('CREATE DATABASE %I OWNER %I', :'db', :'rol') WHERE NOT EXISTS (SELECT 1 FROM pg_database WHERE datname = :'db') \gexec
+SELECT format('REVOKE ALL ON DATABASE %I FROM PUBLIC', :'db') \gexec
+EOSQL
+}
+rol keycloak "$(waarde KC_DB_WACHTWOORD)";          database keycloak keycloak
+rol df_portaal "$(waarde PORTAAL_DB_WACHTWOORD)";   database df_portaal df_portaal
+rol df_portaal_app "$(waarde PORTAAL_APP_WACHTWOORD)"
+psql_beheer -c "GRANT CONNECT ON DATABASE df_portaal TO df_portaal, df_portaal_app"
+rol kluis "$(waarde KLUIS_DB_WACHTWOORD)";          database kluis kluis
+ok "Databases voor Keycloak, het portaal en de kluis"
+
 garage() { docker compose exec -T garage /garage "$@"; }
 # Een eigen sleutel per onderdeel (DF-ADR-002): Lakekeeper en de schrijvers lezen
 # en schrijven, Trino leest alleen.
@@ -115,13 +140,18 @@ docker compose run --rm --no-deps -T \
   -e GARAGE_LAKEKEEPER_GEHEIM="$(waarde GARAGE_LAKEKEEPER_GEHEIM)" \
   werk python -m beheer.inrichten
 
-meld "De rest: Trino, Dagster, Caddy"
+meld "De rest: Trino, Dagster, Keycloak, portaal, Caddy"
 docker compose up -d --remove-orphans
 ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
+
+if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ]; then
+  "$DF_REPO/server/keycloak.sh"
+fi
 
 D="$(waarde DOMEIN)"
 cat <<EOF
 
+  Portaal:      https://portaal.$D/   (inloggen via Keycloak; noodaccount op /emergency)
   Startpagina:  https://$D/
   Dagster:      https://dagster.$D/
   Lakekeeper:   https://catalogus.$D/ui/
@@ -133,6 +163,9 @@ cat <<EOF
   (Bewaar het in je wachtwoordmanager. Opnieuw tonen: sudo grep WEB_WACHTWOORD= $DF_REPO/compose/.env)
 
   De ingestie van de bronnen draait elke 5 minuten (Dagster, schema ingestie_elke_5_minuten).
+
+  Noodaccount van het portaal instellen (eenmalig; toont wachtwoord en TOTP-geheim):
+    sudo docker compose -f $DF_REPO/compose/compose.yml run --rm portaal-migreer node backend/dist/cli.js nood-instellen
 
   Sleutel voor de landingsbucket, voor dfw (sudo ./bron.sh landing-sleutel):
     Sleutel-id: $(waarde GARAGE_LANDING_SLEUTEL)

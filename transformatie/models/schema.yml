@@ -9,7 +9,8 @@ models:
       - name: pl_id
         tests: [unique, not_null]
       # Testdata kan hier afwijken; een waarschuwing, geen fout.
-      - name: bsn
+      - name: pseudoniem
+        description: Pseudoniem uit de kluis (DF-ADR-015); leeg als er geen BSN is.
         tests:
           - unique: {config: {severity: warn}}
           - not_null: {config: {severity: warn}}

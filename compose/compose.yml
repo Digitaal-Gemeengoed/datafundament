@@ -7,7 +7,9 @@
 #   Trino               de enige voordeur voor afnemers (DF-ADR-008)
 #   werk                de code: ingestie (dlt) en transformatie (dbt); code server voor Dagster
 #   Dagster             webserver en daemon: de regisseur
-#   Caddy               TLS en de enige ingang, met een wachtwoord zolang het een PoC is
+#   Keycloak            inloggen (DF-ADR-012), op id.<domein>
+#   portaal             het portaal: platform, dataproducten, toegang, verwijderen (DF-ADR-013)
+#   Caddy               TLS en de enige ingang; de onderdelen nog met één wachtwoord
 #
 # Installeren en bijwerken: sudo /opt/datafundament/server/installeer-platform.sh
 # Versies zijn vastgepind; zie proeven/iceberg-schrijfpad (DF-ADR-004).
@@ -22,6 +24,9 @@ x-werk-omgeving: &werk-omgeving
   DLT_WACHTWOORD: ${DLT_WACHTWOORD:?}
   ZAKEN_API_URL: http://10.67.0.2:8000
   ZAKEN_API_GEHEIM: ${ZAKEN_API_GEHEIM:?}
+  # De sleutelkluis (DF-ADR-015): pseudoniemen per BSN, in een eigen database.
+  KLUIS_GEHEIM: ${KLUIS_GEHEIM:?}
+  KLUIS_DSN: host=db dbname=kluis user=kluis password=${KLUIS_DB_WACHTWOORD:?}
   # dlt schrijft Iceberg in Garage, met de sleutel van de schrijvers.
   DESTINATION__FILESYSTEM__BUCKET_URL: s3://lakehouse/warehouse/dlt
   DESTINATION__FILESYSTEM__CREDENTIALS__AWS_ACCESS_KEY_ID: ${GARAGE_SCHRIJVER_SLEUTEL:?}
@@ -162,6 +167,72 @@ services:
     volumes: *werk-volumes
     depends_on: [werk]
 
+  # Inloggen (DF-ADR-012). Realm, client en eerste gebruiker: server/keycloak.sh.
+  # Het beheerscherm is van buiten dicht; via een SSH-tunnel op http://localhost:8088/admin.
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.8.2
+    restart: unless-stopped
+    command: ["start"]
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_WACHTWOORD:?}
+      KC_HOSTNAME: https://id.${DOMEIN:?}
+      KC_HOSTNAME_ADMIN: http://localhost:8088
+      KC_HTTP_ENABLED: "true"
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: "true"
+      KC_BOOTSTRAP_ADMIN_USERNAME: beheer
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KC_BEHEERDER_WACHTWOORD:?}
+    ports:
+      - "127.0.0.1:8088:8080"
+    depends_on:
+      db: { condition: service_healthy }
+
+  # Het portaal (DF-ADR-013), op het fundament van oa-beheer. Eerst de migraties
+  # en het hoofdaccount, als eigenaar van de database; daarna het portaal zelf.
+  portaal-migreer:
+    build: ../portaal
+    image: datafundament-portaal
+    pull_policy: build
+    command: ["node", "backend/dist/cli.js", "migreer"]
+    environment: &portaal-omgeving
+      BEHEER_HOST: portaal.${DOMEIN}
+      ADMIN_SECRET: ${PORTAAL_ADMIN_GEHEIM:?}
+      DATABASE_URL: postgres://df_portaal_app:${PORTAAL_APP_WACHTWOORD:?}@db:5432/df_portaal
+      DATABASE_URL_EIGENAAR: postgres://df_portaal:${PORTAAL_DB_WACHTWOORD:?}@db:5432/df_portaal
+      HOOFDACCOUNT_EMAIL: ${PORTAAL_HOOFDACCOUNT:-beheer@${DOMEIN}}
+      # Leeg tot server/keycloak.sh heeft gedraaid; dan werkt alleen /emergency.
+      OIDC_ISSUER: ${PORTAAL_OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: df-portaal
+      OIDC_CLIENT_SECRET: ${PORTAAL_OIDC_GEHEIM:-}
+      KLUIS_GEHEIM: ${KLUIS_GEHEIM}
+      DAGSTER_URL: http://dagster-webserver:3000
+      DAGSTER_LOCATIE: datafundament
+      LAKEKEEPER_URL: http://lakekeeper:8181
+      TRINO_URL: http://trino:8080
+      GARAGE_URL: http://garage:3903
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_GEBRUIKER: ${SMTP_GEBRUIKER:-}
+      SMTP_WACHTWOORD: ${SMTP_WACHTWOORD:-}
+      SMTP_AFZENDER: ${SMTP_AFZENDER:-}
+    restart: "no"
+    depends_on:
+      db: { condition: service_healthy }
+
+  portaal:
+    image: datafundament-portaal
+    pull_policy: never
+    restart: unless-stopped
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    environment: *portaal-omgeving
+    depends_on:
+      portaal-migreer: { condition: service_completed_successfully }
+
   caddy:
     image: caddy:2.10
     restart: unless-stopped
@@ -177,7 +248,7 @@ services:
       - ./caddy/start:/srv/start:ro
       - caddydata:/data
       - caddyconfig:/config
-    depends_on: [dagster-webserver, trino, lakekeeper]
+    depends_on: [dagster-webserver, trino, lakekeeper, portaal, keycloak]
 
 volumes:
   dbdata:

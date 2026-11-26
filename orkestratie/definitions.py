@@ -32,6 +32,7 @@ from dagster import (
 from dagster_dbt import DagsterDbtTranslator, DbtCliResource, DbtProject, dbt_assets
 
 from beheer import onderhoud
+from orkestratie.verwijderen import verwijderen
 from ingestie import bronnen, pdok
 
 
@@ -146,7 +147,7 @@ keten_job = define_asset_job("keten", selection=AssetSelection.all() - AssetSele
 
 defs = Definitions(
     assets=bron_specs() + LADERS + [adres_locatie, cbs_buurten, dbt_modellen],
-    jobs=[ingestie_job, keten_job, onderhoud_lakehouse],
+    jobs=[ingestie_job, keten_job, onderhoud_lakehouse, verwijderen],
     resources={"dbt": DbtCliResource(project_dir=DBT)},
     schedules=[
         # Snel: wijzigingen in de bronnen komen binnen enkele minuten in de ruwe laag.

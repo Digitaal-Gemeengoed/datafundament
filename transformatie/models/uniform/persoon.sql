@@ -14,11 +14,8 @@ overleden as (
 )
 select
     pl.id                                           as pl_id,
-    pl.burgerservicenummer                          as bsn,
-    pl.a_nummer,
-    p.voornamen,
-    nullif(p.voorvoegsel_geslachtsnaam, '')         as voorvoegsel,
-    p.geslachtsnaam,
+    -- Geen BSN, A-nummer of naam: die komen niet in het lakehouse (DF-ADR-015).
+    pl.pseudoniem,
     {{ brp_datum('p.geboortedatum') }}              as geboortedatum,
     p.geslachtsaanduiding                           as geslacht_code,
     g.omschrijving                                  as geslacht,

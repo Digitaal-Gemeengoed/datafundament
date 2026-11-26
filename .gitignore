@@ -6,3 +6,8 @@ __pycache__/
 transformatie/target/
 transformatie/logs/
 transformatie/dbt_packages/
+
+# Portaal
+portaal/node_modules/
+portaal/*/node_modules/
+portaal/*/dist/
