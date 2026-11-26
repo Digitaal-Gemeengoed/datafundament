@@ -41,3 +41,19 @@ Mogelijke aanvullingen, nog te bekijken:
 
 - **Alleen zelf gegenereerde data:** volledig in de hand, maar minder overtuigend dan de echte structuur van een BRP-systeem.
 - **Geanonimiseerde echte data:** te veel risico en te veel werk voor een PoC.
+
+## Aanvulling (26 november 2026): de testdata van vrijBRP
+
+Een database of dump van vrijBRP zelf staat niet openbaar, en de hele vrijBRP Balie (Java met Tomcat) draaien is te veel werk voor wat de PoC nodig heeft. Wel openbaar, onder de EUPL-1.2: de module `gba-testdata` in [vrijBRP-Balie](https://github.com/vrijBRP/vrijBRP-Balie) (Procura). Daarin staan de testsets van de RvIG en GBA-V en de demopersonen van Procura, als persoonslijsten in de structuur van het LO BRP, met historie.
+
+**Besluit:**
+
+- De bron op dfw is een eigen PostgreSQL-schema dat lijkt op dat van een BRP-systeem: een tabel per categorie, een kolom per rubriek, met historie. Zie [`bron/`](../../bron/README.md).
+- Een script laadt de testdata, vastgepind op commit `fb9f41b`, en ontdubbelt op A-nummer: 666 personen, ruim 7.000 rijen, waarvan ongeveer 3.000 historie.
+- De testdata komt niet in onze repo; het script haalt haar op.
+- Mutaties voor de demo (verhuizen, overlijden, een nieuwe kolom) schrijven in de bron, zodat CDC en schemawijziging live te zien zijn.
+
+**Gevolgen:**
+
+- De personen wonen volgens de testdata vooral in Stichtse Vecht, Den Haag, Rotterdam en Amsterdam, en deels in fictieve testgemeenten van de RvIG. BAG, CBS-buurten en meldingen volgen daarom die gemeenten, niet Haarlem.
+- vrijBRP staat in de Softwarecatalogus inmiddels bij Shift2. Wie later een echte vrijBRP-database als bron wil gebruiken, kan daar terecht.
