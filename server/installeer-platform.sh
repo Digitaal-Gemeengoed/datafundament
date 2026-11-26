@@ -29,7 +29,7 @@ for n in DB_WACHTWOORD LK_DB_WACHTWOORD DAGSTER_DB_WACHTWOORD DWH_SCHRIJVER_WACH
 done
 vul_aan LK_SLEUTEL "$(geheim 32)"
 vul_aan GARAGE_RPC_GEHEIM "$(geheim 32)"
-for k in BEHEER LAKEKEEPER SCHRIJVER LEZER; do
+for k in BEHEER LAKEKEEPER SCHRIJVER LEZER LANDING; do
   vul_aan "GARAGE_${k}_SLEUTEL" "GK$(geheim 12)"
   vul_aan "GARAGE_${k}_GEHEIM" "$(geheim 32)"
 done
@@ -41,6 +41,14 @@ if ! grep -q '^DLT_WACHTWOORD=' "$ENV"; then
   done
   vul_aan DLT_WACHTWOORD "$W"
 fi
+if ! grep -q '^ZAKEN_API_GEHEIM=' "$ENV"; then
+  while :; do
+    read -r -s -p "  Geheim van de Zaken-API (op dfw: sudo ./bron.sh zaken-api-geheim): " W; echo
+    [[ "$W" =~ ^[0-9a-f]{32,}$ ]] && break
+    waarschuw "Dat lijkt niet op het geheim (alleen 0-9 en a-f)."
+  done
+  vul_aan ZAKEN_API_GEHEIM "$W"
+fi
 vul_aan WEB_GEBRUIKER datafundament
 if ! grep -q '^WEB_WACHTWOORD=' "$ENV"; then
   WW="$(geheim 12)"
@@ -50,6 +58,13 @@ if ! grep -q '^WEB_WACHTWOORD=' "$ENV"; then
   vul_aan WEB_WACHTWOORD_HASH "'$HASH'"
 fi
 ok "Alle instellingen staan in .env (alleen leesbaar voor root)"
+
+# Het poortfilter bijwerken (nieuwe poorten, zoals Garage voor de landingsbucket).
+if [ -x /usr/local/sbin/df-docker-filter ] && ! cmp -s "$DF_REPO/server/docker-filter.sh" /usr/local/sbin/df-docker-filter; then
+  install -m 755 "$DF_REPO/server/docker-filter.sh" /usr/local/sbin/df-docker-filter
+  systemctl restart df-docker-filter
+  ok "Poortfilter bijgewerkt"
+fi
 
 if ping -c 1 -W 2 10.67.0.2 >/dev/null 2>&1; then
   ok "De bron op dfw is bereikbaar via WireGuard"
@@ -71,21 +86,27 @@ done
 garage() { docker compose exec -T garage /garage "$@"; }
 # Een eigen sleutel per onderdeel (DF-ADR-002): Lakekeeper en de schrijvers lezen
 # en schrijven, Trino leest alleen.
-sleutel() {  # NAAM RECHTEN...
-  local naam="$1"; shift
+sleutel() {  # NAAM BUCKET RECHTEN...
+  local naam="$1" bucket="$2"; shift 2
   local id geheim
   id="$(waarde "GARAGE_${naam^^}_SLEUTEL")"; geheim="$(waarde "GARAGE_${naam^^}_GEHEIM")"
   if ! garage key info "$naam" >/dev/null 2>&1; then
     garage key import --yes "$id" "$geheim" -n "$naam" >/dev/null \
       || stop "Sleutel '$naam' kon niet in Garage worden gezet. Zie: sudo docker compose -f $DF_REPO/compose/compose.yml logs garage"
   fi
-  garage bucket allow "$@" lakehouse --key "$naam" >/dev/null \
-    || stop "Rechten voor sleutel '$naam' op de bucket lakehouse konden niet worden gezet."
-  ok "Sleutel $naam: ${*//--/}"
+  garage bucket allow "$@" "$bucket" --key "$naam" >/dev/null \
+    || stop "Rechten voor sleutel '$naam' op de bucket $bucket konden niet worden gezet."
+  ok "Sleutel $naam op $bucket: ${*//--/}"
 }
-sleutel lakekeeper --read --write
-sleutel schrijver --read --write
-sleutel lezer --read
+sleutel lakekeeper lakehouse --read --write
+sleutel schrijver lakehouse --read --write
+sleutel lezer lakehouse --read
+# De landingsbucket (DF-ADR-014): de leverancier op dfw mag er alleen in schrijven,
+# de ingestie leest hem.
+garage bucket info landing >/dev/null 2>&1 || garage bucket create landing >/dev/null \
+  || stop "De bucket landing kon niet worden gemaakt."
+sleutel landing landing --write
+sleutel schrijver landing --read
 
 meld "Iceberg-catalogus (Lakekeeper)"
 docker compose up -d lakekeeper
@@ -111,7 +132,11 @@ cat <<EOF
   Wachtwoord:   $(waarde WEB_WACHTWOORD)
   (Bewaar het in je wachtwoordmanager. Opnieuw tonen: sudo grep WEB_WACHTWOORD= $DF_REPO/compose/.env)
 
-  De ingestie van de bron draait elke 5 minuten (Dagster, schema ingestie_elke_5_minuten).
+  De ingestie van de bronnen draait elke 5 minuten (Dagster, schema ingestie_elke_5_minuten).
+
+  Sleutel voor de landingsbucket, voor dfw (sudo ./bron.sh landing-sleutel):
+    Sleutel-id: $(waarde GARAGE_LANDING_SLEUTEL)
+    Geheim:     opnieuw tonen met: sudo grep GARAGE_LANDING_GEHEIM= $DF_REPO/compose/.env
   Controleren: sudo docker compose -f $DF_REPO/compose/compose.yml ps
 EOF
 echo

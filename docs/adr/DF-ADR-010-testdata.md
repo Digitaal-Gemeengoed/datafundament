@@ -89,5 +89,5 @@ De BRP alleen laat te weinig zien van wat een gemeente in haar datawarehouse hee
 **Gevolgen:**
 
 - `sociaal` bevat bijzondere persoonsgegevens (art. 9 AVG), al zijn ze verzonnen. In de PoC staan ze, net als de rest, in de ruwe laag. Het laat zien waar straks toegangsregels (Trino, Keycloak, DF-ADR-012) en maskering in dbt nodig zijn; dat is het eerstvolgende dataproduct op deze bronnen.
-- De publicatie `datafundament` omvat nu alle zeven schema's.
-- De ingestie doet veertien dlt-runs in plaats van twee. Dat past nog in het schema van vijf minuten; anders gaat de frequentie omlaag.
+- De publicatie `datafundament` omvat de schema's die dfc rechtstreeks leest. Zaken en belastingen komen sinds DF-ADR-014 via een API en een export.
+- De ingestie doet veertien dlt-runs in plaats van twee (zeven bronnen, twee lagen). Dat past nog in het schema van vijf minuten; anders gaat de frequentie omlaag.

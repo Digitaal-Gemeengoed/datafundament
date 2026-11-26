@@ -89,6 +89,8 @@ CREATE TABLE IF NOT EXISTS woz.belanghebbende (
   bsn text,                                    -- natuurlijk persoon
   nnp_id text,                                 -- niet-natuurlijk persoon
   nnp_naam text,
+  begindatum date NOT NULL,
+  einddatum date,                              -- verkocht, verhuisd, overleden
   gewijzigd_op timestamptz NOT NULL DEFAULT now()
 );
 
@@ -105,7 +107,7 @@ CREATE TABLE IF NOT EXISTS belastingen.aanslag (
   wozobjectnummer text,
   bedrag numeric(10, 2) NOT NULL,
   dagtekening date NOT NULL,
-  status text NOT NULL,                        -- betaald, openstaand, kwijtgescholden
+  status text NOT NULL,                        -- openstaand, betaald, aanmaning verstuurd, kwijtgescholden
   gewijzigd_op timestamptz NOT NULL DEFAULT now()
 );
 

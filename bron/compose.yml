@@ -2,7 +2,9 @@
 # logische replicatie voor CDC (DF-ADR-006). Alleen bereikbaar via WireGuard,
 # en alleen voor dfc (pg_hba.conf en het poortfilter, DF-ADR-009).
 #
-# Bedienen met ./bron.sh (start, laden, verhuis, overlijden, kolom-erbij, status).
+# Daarnaast de Zaken-API van het (synthetische) zaaksysteem (DF-ADR-014).
+#
+# Bedienen met ./bron.sh (zie ./bron.sh help).
 
 name: df-bron
 
@@ -45,17 +47,43 @@ services:
       interval: 5s
       retries: 30
 
-  # Laden en muteren (brp.py). Draait alleen op verzoek: ./bron.sh <opdracht>
+  # Laden, muteren, simuleren en exporteren (brp.py). Draait alleen op verzoek:
+  # ./bron.sh <opdracht>, of elk uur via de timer van de simulatie.
   werkbank:
     build: ./werkbank
+    image: df-bron-werkbank
     profiles: [werk]
     environment:
       PGHOST: db
       PGUSER: bron
       PGPASSWORD: ${BRON_WACHTWOORD}
       PGDATABASE: bron
+      ZAKEN_API_DB_WACHTWOORD: ${ZAKEN_API_DB_WACHTWOORD:-}
+      # Nachtelijke export naar de landingsbucket op dfc (sleutel mag alleen schrijven).
+      LANDING_ENDPOINT: ${LANDING_ENDPOINT:-http://10.67.0.1:3900}
+      LANDING_SLEUTEL: ${LANDING_SLEUTEL:-}
+      LANDING_GEHEIM: ${LANDING_GEHEIM:-}
     volumes:
       - testdata:/data
+    networks: [bron]
+    depends_on:
+      db: { condition: service_healthy }
+
+  # De Zaken-API (ZGW-achtig, alleen lezen), voor dfc via WireGuard.
+  zaken-api:
+    image: df-bron-werkbank
+    pull_policy: never
+    restart: unless-stopped
+    entrypoint: ["uvicorn", "zaken_api:app", "--host", "0.0.0.0", "--port", "8000", "--no-access-log"]
+    environment:
+      PGHOST: db
+      PGUSER: zaken_api
+      PGPASSWORD: ${ZAKEN_API_DB_WACHTWOORD:?}
+      PGDATABASE: bron
+      ZAKEN_API_GEHEIM: ${ZAKEN_API_GEHEIM:?}
+      BASIS_URL: http://${WG_ADRES:-10.67.0.2}:8000
+    ports:
+      - "${WG_ADRES:-10.67.0.2}:8000:8000"
     networks: [bron]
     depends_on:
       db: { condition: service_healthy }
