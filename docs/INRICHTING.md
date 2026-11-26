@@ -87,6 +87,17 @@ sudo /opt/datafundament/server/controleer.sh
 
 Dit loopt SSH, firewall, WireGuard, de verbinding met de andere server, Docker en het poortfilter na. Het verandert niets.
 
+## 6. De bron starten (op dfw)
+
+```
+cd /opt/datafundament/bron
+sudo ./bron.sh start
+sudo ./bron.sh laden
+sudo ./bron.sh status
+```
+
+Zie [`bron/README.md`](../bron/README.md). De bron luistert alleen op 10.67.0.2 en laat alleen dfc toe.
+
 ## Daarna
 
 - **DNS:** het domein is `datafundament.haarlem.dev`. Twee A-records, beide naar 207.180.253.52 (dfc):

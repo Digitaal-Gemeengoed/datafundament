@@ -1,0 +1,72 @@
+# De bron op dfw: PostgreSQL met de testpersonen uit vrijBRP (DF-ADR-010), met
+# logische replicatie voor CDC (DF-ADR-006). Alleen bereikbaar via WireGuard,
+# en alleen voor dfc (pg_hba.conf en het poortfilter, DF-ADR-009).
+#
+# Bedienen met ./bron.sh (start, laden, verhuis, overlijden, kolom-erbij, status).
+
+name: df-bron
+
+services:
+  db:
+    image: postgres:${POSTGRES_VERSIE:-17}
+    restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_replication_slots=10
+      - -c
+      - max_wal_senders=10
+      # Een replicatieslot dat niemand leest, houdt WAL vast. Hier stopt dat bij 2 GB,
+      # zodat de schijf niet volloopt als dfc een tijd niet leest.
+      - -c
+      - max_slot_wal_keep_size=2GB
+      - -c
+      - hba_file=/etc/postgresql/pg_hba.conf
+      - -c
+      - listen_addresses=*
+    environment:
+      POSTGRES_USER: bron
+      POSTGRES_PASSWORD: ${BRON_WACHTWOORD:?}
+      POSTGRES_DB: bron
+      # Voor sql/01-rollen.sh: het wachtwoord van de leesgebruiker voor dlt op dfc.
+      DLT_WACHTWOORD: ${DLT_WACHTWOORD:?}
+    volumes:
+      - bronpg:/var/lib/postgresql/data
+      - ./sql:/docker-entrypoint-initdb.d:ro
+      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
+    ports:
+      # Alleen op het WireGuard-adres. Lokaal (laptop): WG_ADRES=127.0.0.1 in .env.
+      - "${WG_ADRES:-10.67.0.2}:5432:5432"
+    networks: [bron]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bron -d bron"]
+      interval: 5s
+      retries: 30
+
+  # Laden en muteren (brp.py). Draait alleen op verzoek: ./bron.sh <opdracht>
+  werkbank:
+    build: ./werkbank
+    profiles: [werk]
+    environment:
+      PGHOST: db
+      PGUSER: bron
+      PGPASSWORD: ${BRON_WACHTWOORD}
+      PGDATABASE: bron
+    volumes:
+      - testdata:/data
+    networks: [bron]
+    depends_on:
+      db: { condition: service_healthy }
+
+networks:
+  bron:
+    # Vast subnet, zodat pg_hba.conf de werkbank kan toelaten.
+    ipam:
+      config:
+        - subnet: 172.30.67.0/24
+
+volumes:
+  bronpg:
+  testdata:
