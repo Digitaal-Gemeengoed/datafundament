@@ -25,3 +25,9 @@ Echte CDC op de bronnen van een gemeente is een ander verhaal. Veel bronnen zijn
 ## Overwogen
 
 - **Debezium met Kafka:** CDC voor veel databases, maar te zwaar voor een PoC en tegen de lichte opzet van DF-ADR-001. Dit sluit aan bij OA-ADR-003, waar om dezelfde reden voor een outbox is gekozen.
+
+## Stand (26 november 2026)
+
+- **Bewezen:** dlt leest de bron op dfw over WireGuard als `dlt_lezer` (de bron ziet 10.67.0.1) en laadt incrementeel op `gewijzigd_op`. Na een verhuizing komen alleen de twee gewijzigde rijen en de persoonslijst binnen.
+- **Grens van die aanpak:** verwijderde rijen ziet hij niet, en na een grote lading delen veel rijen hetzelfde tijdstip (dlt waarschuwt daarvoor; het werkt wel).
+- **Nog te doen:** logische replicatie (`pg_replication`), die ook verwijderingen ziet. De publicatie `datafundament` staat al klaar op de bron. Tot dat werkt, is incrementeel laden de terugval.
