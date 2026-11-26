@@ -7,6 +7,9 @@
 #   sudo ./bron.sh overlijden [BSN]   een persoon overlijdt (demo CDC)
 #   sudo ./bron.sh kolom-erbij        nieuwe kolom in de bron (demo schemawijziging)
 #   sudo ./bron.sh status             aantallen, laatste wijzigingen, replicatie
+#   sudo ./bron.sh synthetisch        synthetische bronnen rond de BRP (bag, woz, mor, ...)
+#   sudo ./bron.sh melding            nieuwe melding openbare ruimte (demo CDC)
+#   sudo ./bron.sh zaak-afhandelen    een open zaak afhandelen (demo CDC)
 #   sudo ./bron.sh psql               SQL-prompt in de bron
 #   sudo ./bron.sh dlt-wachtwoord     het wachtwoord van dlt_lezer, voor dfc
 #   sudo ./bron.sh opnieuw            alles weg en opnieuw beginnen (vraagt eerst)
@@ -41,7 +44,7 @@ werkbank() { docker compose --profile werk run --rm -T werkbank "$@"; }
 
 case "${1:-help}" in
   start) start ;;
-  laden|verhuis|overlijden|kolom-erbij|status) maak_env; werkbank "$@" ;;
+  laden|verhuis|overlijden|kolom-erbij|status|synthetisch|melding|zaak-afhandelen) maak_env; werkbank "$@" ;;
   psql) docker compose exec db psql -U bron bron ;;
   dlt-wachtwoord) grep '^DLT_WACHTWOORD=' .env | cut -d= -f2 ;;
   opnieuw)
@@ -49,6 +52,7 @@ case "${1:-help}" in
     [[ "${a,,}" =~ ^(j|ja)$ ]] || exit 0
     docker compose --profile werk down -v
     start
-    werkbank laden ;;
-  *) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//' ;;
+    werkbank laden
+    werkbank synthetisch ;;
+  *) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

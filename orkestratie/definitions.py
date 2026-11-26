@@ -1,8 +1,9 @@
 """Dagster: de keten van het Datafundament als assets.
 
-  bron_brp/*        de tabellen van de bron op dfw (extern)
-  ruw_brp/*         ingestie met dlt, insert-only (elke versie)
-  ruw_brp_stand/*   ingestie met dlt, de huidige stand
+  bron_<bron>/*       de tabellen van een bron op dfw (extern): brp, bag, woz,
+                      belastingen, mor, zaken, sociaal
+  ruw_<bron>/*        ingestie met dlt, insert-only (elke versie)
+  ruw_<bron>_stand/*  ingestie met dlt, de huidige stand
   ruw_pdok/*        adressen opgezocht in de BAG (Locatieserver), buurten van CBS
   uniform/*         dbt: de uniforme laag (Iceberg)
   dataproduct/*     dbt: dataproducten (Iceberg en PostGIS)
@@ -27,40 +28,41 @@ from dagster import (
 )
 from dagster_dbt import DagsterDbtTranslator, DbtCliResource, DbtProject, dbt_assets
 
-from ingestie import brp, pdok
-
-BRON = "bron_brp"  # de tabellen op dfw, als externe assets
+from ingestie import bronnen, pdok
 
 
-# --- Ingestie van de bron ----------------------------------------------------
+# --- Ingestie van de bronnen ---------------------------------------------------
 
 def bron_specs():
     return [
-        AssetSpec([BRON, t], group_name="bron", kinds={"postgres"},
-                  description=f"brp.{t} in de bron op dfw (testdata vrijBRP)")
-        for t in brp.ALLE_TABELLEN
+        AssetSpec([f"bron_{b}", t], group_name="bron", kinds={"postgres"},
+                  description=f"{b}.{t} in de bron op dfw ({info['omschrijving']})")
+        for b, info in bronnen.BRONNEN.items() for t in bronnen.alle_tabellen(b)
     ]
 
 
-def ingestie(laag, omschrijving):
+def ingestie(bron, laag, omschrijving):
     specs = [
-        AssetSpec([laag, t], group_name=laag, kinds={"dlt", "iceberg"}, deps=[[BRON, t]],
+        AssetSpec([laag, t], group_name=laag, kinds={"dlt", "iceberg"}, deps=[[f"bron_{bron}", t]],
                   description=f"{t}: {omschrijving}")
-        for t in brp.ALLE_TABELLEN
+        for t in bronnen.alle_tabellen(bron)
     ]
 
     @multi_asset(name=f"laad_{laag}", specs=specs, can_subset=False)
     def _laad(context: AssetExecutionContext):
-        rijen = brp.laad(laag)
+        rijen = bronnen.laad(bron, laag)
         context.log.info(f"{laag}: {sum(rijen.values())} rijen geladen")
-        for t in brp.ALLE_TABELLEN:
+        for t in bronnen.alle_tabellen(bron):
             yield MaterializeResult(asset_key=[laag, t], metadata={"rijen_geladen": rijen[t]})
 
     return _laad
 
 
-laad_ruw = ingestie("ruw_brp", "elke versie van elke rij (insert-only)")
-laad_stand = ingestie("ruw_brp_stand", "de huidige stand (upsert op id)")
+LADERS = [
+    ingestie(b, laag, "elke versie van elke rij (insert-only)" if laag == f"ruw_{b}"
+             else "de huidige stand (upsert op id)")
+    for b in bronnen.BRONNEN for laag in bronnen.lagen(b)
+]
 
 
 # --- Geodata van PDOK ----------------------------------------------------------
@@ -114,15 +116,15 @@ def dbt_modellen(context: AssetExecutionContext, dbt: DbtCliResource):
 
 # --- Jobs en schema's --------------------------------------------------------------
 
-ingestie_job = define_asset_job("ingestie_brp", selection=AssetSelection.assets(laad_ruw, laad_stand))
+ingestie_job = define_asset_job("ingestie", selection=AssetSelection.assets(*LADERS))
 keten_job = define_asset_job("keten", selection=AssetSelection.all() - AssetSelection.groups("bron"))
 
 defs = Definitions(
-    assets=bron_specs() + [laad_ruw, laad_stand, adres_locatie, cbs_buurten, dbt_modellen],
+    assets=bron_specs() + LADERS + [adres_locatie, cbs_buurten, dbt_modellen],
     jobs=[ingestie_job, keten_job],
     resources={"dbt": DbtCliResource(project_dir=DBT)},
     schedules=[
-        # Snel: wijzigingen in de bron komen binnen enkele minuten in de ruwe laag.
+        # Snel: wijzigingen in de bronnen komen binnen enkele minuten in de ruwe laag.
         ScheduleDefinition(
             name="ingestie_elke_5_minuten",
             job=ingestie_job,

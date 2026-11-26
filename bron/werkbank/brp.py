@@ -12,6 +12,9 @@ historie. En het kan de bron laten veranderen, voor de demo van CDC.
     python brp.py overlijden [BSN]       een persoon overlijdt
     python brp.py kolom-erbij            nieuwe kolom in brp.persoon (schemawijziging)
     python brp.py status                 aantallen, laatste wijzigingen, replicatie
+    python brp.py synthetisch            synthetische bronnen rond de BRP (bag, woz, ...)
+    python brp.py melding                nieuwe melding openbare ruimte (demo CDC)
+    python brp.py zaak-afhandelen        een open zaak afhandelen (demo CDC)
 
 Zonder BSN kiest het script een geschikte persoon. Verbinding: de PG*-
 omgevingsvariabelen (PGHOST, PGUSER, PGPASSWORD, PGDATABASE).
@@ -373,6 +376,12 @@ def main(args):
         kolom_erbij()
     elif opdracht == "status":
         status()
+    elif opdracht in ("synthetisch", "melding", "zaak-afhandelen"):
+        import synthetisch  # pylint: disable=import-outside-toplevel
+        actie = {"synthetisch": synthetisch.synthetisch, "melding": synthetisch.melding,
+                 "zaak-afhandelen": synthetisch.zaak_afhandelen}[opdracht]
+        with verbind() as con:
+            actie(con)
     else:
         raise SystemExit(f"Onbekende opdracht: {opdracht}. Zie: python brp.py help")
 

@@ -64,3 +64,30 @@ Een database of dump van vrijBRP zelf staat niet openbaar, en de hele vrijBRP Ba
 - **Buurten:** CBS Wijken en Buurten 2025 via de OGC API van PDOK (CC-BY 4.0), alleen voor de gemeenten die de Locatieserver teruggeeft. Met kerncijfers, zoals het aantal inwoners.
 - **Dataproduct:** testpersonen per buurt, naast het aantal inwoners volgens CBS. Het staat in het lakehouse en in PostGIS (met geometrie, sleutel en ruimtelijke index, voor QGIS).
 - Een volledige BAG (tientallen GB) is voor de PoC niet nodig.
+
+## Aanvulling (26 november 2026): synthetische gemeentelijke bronnen
+
+De BRP alleen laat te weinig zien van wat een gemeente in haar datawarehouse heeft. Daarom komen er synthetische bronnen bij, elk als eigen schema in de bron op dfw, zoals een eigen applicatie:
+
+| Schema | Wat | Gekoppeld via |
+|---|---|---|
+| `bag` | woonplaats, openbare ruimte, nummeraanduiding, pand, verblijfsobject | de adressen in de BRP; geldige BAG-identificaties uit de BRP worden overgenomen |
+| `woz` | WOZ-object, waarde per peildatum (2021–2025), belanghebbenden | verblijfsobject; eigenaar en gebruiker op BSN, of een verzonnen corporatie of bedrijf |
+| `belastingen` | aanslagen OZB en afvalstoffenheffing (2024–2026) | WOZ-object en BSN; kwijtschelding bij lopende bijstand |
+| `mor` | 3.000 meldingen openbare ruimte met statusverloop (zoals Signalen) | nummeraanduiding, punt in RD, soms een melder (BSN) |
+| `zaken` | zaaktypen, zaken, statusverloop (zoals de ZGW-API's) | BSN of NNP, verblijfsobject of pand; verhuiszaken volgen de BRP |
+| `sociaal` | Wmo-voorzieningen, jeugdhulp, Participatiewet | BSN; Wmo-voorzieningen horen bij een Wmo-zaak |
+
+**Besluit:**
+
+- Eén generator (`bron/werkbank/synthetisch.py`) maakt alles uit de BRP met een vaste seed: dezelfde BRP geeft dezelfde data. Er staat geen gegenereerde data in de repo.
+- Elke tabel heeft `id` en `gewijzigd_op`, net als de BRP. De ingestie is daarom generiek: één lijst met bronnen in `ingestie/bronnen.py`, per bron de lagen `ruw_<bron>` (insert-only) en `ruw_<bron>_stand` (upsert), en per tabel een asset in Dagster.
+- Bewust ingebouwde verschillen tussen BAG en BRP, voor een kwaliteitscontrole in dbt: adres ontbreekt in de BAG, postcode wijkt af, bewoond verblijfsobject is ingetrokken, ongeldige BAG-identificatie in de BRP, leegstaande woningen. De generator meldt hoeveel van elk.
+- Coördinaten en panden zijn verzonnen (RD, rond een middelpunt per gemeente). Voor echte locaties blijft de Locatieserver.
+- Twee mutaties voor de demo: `bron.sh melding` en `bron.sh zaak-afhandelen`.
+
+**Gevolgen:**
+
+- `sociaal` bevat bijzondere persoonsgegevens (art. 9 AVG), al zijn ze verzonnen. In de PoC staan ze, net als de rest, in de ruwe laag. Het laat zien waar straks toegangsregels (Trino, Keycloak, DF-ADR-012) en maskering in dbt nodig zijn; dat is het eerstvolgende dataproduct op deze bronnen.
+- De publicatie `datafundament` omvat nu alle zeven schema's.
+- De ingestie doet veertien dlt-runs in plaats van twee. Dat past nog in het schema van vijf minuten; anders gaat de frequentie omlaag.
