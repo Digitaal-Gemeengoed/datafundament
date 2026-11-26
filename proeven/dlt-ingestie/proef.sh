@@ -10,8 +10,11 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-docker compose -p df-proef-schrijfpad ps --status running lakekeeper 2>/dev/null | grep -q lakekeeper \
-  || { echo "De opstelling van iceberg-schrijfpad draait niet. Start eerst: sudo ../iceberg-schrijfpad/proef.sh"; exit 1; }
+# De containers van iceberg-schrijfpad, bij naam (een ander compose-project).
+draait() { [ "$(docker inspect -f '{{.State.Running}}' "df-proef-schrijfpad-$1-1" 2>/dev/null)" = true ]; }
+for c in garage lakekeeper trino; do
+  draait "$c" || { echo "De opstelling van iceberg-schrijfpad draait niet ($c). Start eerst: sudo ../iceberg-schrijfpad/proef.sh"; exit 1; }
+done
 ping -c 1 -W 2 10.67.0.2 >/dev/null || { echo "dfw (10.67.0.2) is niet bereikbaar via WireGuard."; exit 1; }
 
 if [ ! -f .env ]; then
@@ -28,7 +31,7 @@ docker compose run --rm ingestie || true
 
 echo
 echo "== Trino leest wat dlt schreef"
-trino() { docker compose -p df-proef-schrijfpad exec -T trino trino --output-format=ALIGNED --execute "$1" 2>&1 | sed 's/^/      /'; }
+trino() { docker exec df-proef-schrijfpad-trino-1 trino --output-format=ALIGNED --execute "$1" 2>&1 | sed 's/^/      /'; }
 trino "SHOW TABLES FROM lakehouse.ruw_brp"
 trino "SELECT 'ruw_brp' AS laag, count(*) AS rijen FROM lakehouse.ruw_brp.verblijfplaats UNION ALL SELECT 'ruw_brp_stand', count(*) FROM lakehouse.ruw_brp_stand.verblijfplaats"
 echo
