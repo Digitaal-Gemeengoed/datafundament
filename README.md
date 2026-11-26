@@ -50,7 +50,7 @@ docs/adr/         architectuurbesluiten
 | 1 | Compose `kern` draait lokaal. **Tests:** dbt-duckdb → Lakekeeper → Garage (DF-ADR-004), remote signing of vaste sleutels (DF-ADR-002) |
 | 2 | Bronnen: VrijBRP-testdata in Postgres met logische replicatie; BAG en CBS voor het demogebied. dlt laadt de ruwe laag met SCD2 |
 | 3 | dbt: uniforme laag, kwaliteitstests, snapshots, dataproduct "meldingen per buurt" naar PostGIS en terug naar Iceberg. **Test:** QGIS via Trino (DF-ADR-008) |
-| 4 | Dagster stuurt de keten; schema drift en CDC live te tonen. VPS ingericht, Caddy met wachtwoord ervoor |
+| 4 | Dagster stuurt de keten; schema drift en CDC live te tonen. Beide VPS'en ingericht met WireGuard, Caddy met wachtwoord ervoor |
 | 5 | OpenMetadata als het geheugen het toelaat (anders lineage in Dagster). Draaiboek voor de demo |
 
 Na de eerste week: OpenMetadata volledig, Keycloak en regels in Trino (maskering, log), het portaal.
