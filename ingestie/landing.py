@@ -42,8 +42,11 @@ def source(laag, stand=False):
     def aanslag():
         fs, map_ = bestandssysteem()
         gelezen = dlt.current.resource_state().setdefault("gelezen", [])
-        nieuw = sorted(p for p in fs.ls(map_, detail=False, refresh=True)
-                       if p.endswith(".csv") and os.path.basename(p) not in gelezen)
+        try:
+            alles = fs.ls(map_, detail=False, refresh=True)
+        except FileNotFoundError:  # nog niets aangeleverd: in S3 bestaat een lege map niet
+            alles = []
+        nieuw = sorted(p for p in alles if p.endswith(".csv") and os.path.basename(p) not in gelezen)
         laatste = {}
         for pad in nieuw:  # de namen bevatten het tijdstip: oud eerst
             with fs.open(pad, "rb") as f:
