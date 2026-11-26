@@ -22,10 +22,12 @@ Geschat geheugengebruik van het platform:
 
 **Twee VPS'en**, los van de servers van de Office Assistent en het gemeenschapsplatform, en niet in hun privénetwerk:
 
-| Server | Wat | Grootte |
-|---|---|---|
-| **platform** | `kern`, `metadata` en `portaal` | Cloud VPS 12: 12 vCPU, 48 GB geheugen, 200 GB NVMe |
-| **bron** | het bronsysteem: PostgreSQL met de testdata van VrijBRP (DF-ADR-010), met logische replicatie (DF-ADR-006) | Cloud VPS 4: 4 vCPU, 8 GB geheugen |
+| Server | Wat | Grootte | Privénetwerk | WireGuard |
+|---|---|---|---|---|
+| **dfc** (Datafundament Core): platform | `kern`, `metadata` en `portaal` | Cloud VPS 12: 12 vCPU, 48 GB geheugen, 200 GB NVMe | 10.0.24.2 | 10.67.0.1 |
+| **dfw**: bron | het bronsysteem: PostgreSQL met de testdata van VrijBRP (DF-ADR-010), met logische replicatie (DF-ADR-006) | Cloud VPS 6: 6 vCPU, 12 GB geheugen | 10.0.24.1 | 10.67.0.2 |
+
+Het WireGuard-netwerk 10.67.0.0/24 is bewust anders dan dat van de Office Assistent (10.66.0.0/24).
 
 - **Netwerk:** de twee servers praten via het private netwerk van de provider, met **WireGuard** daarover. Het private netwerk houdt het verkeer van het internet af; WireGuard versleutelt het en maakt ons onafhankelijk van de provider (zoals bij de Office Assistent). De poort van PostgreSQL op de bron luistert alleen op het WireGuard-adres, en de firewall laat alleen de platformserver toe. Docker gaat langs ufw heen; daarom een filter per poort, zoals `docker-filter.sh` in `oa-uitrol`.
 - **Docker Compose met profielen** op het platform: `kern`, `metadata`, `portaal`. Op de bron een eigen, kleine compose.
@@ -39,7 +41,7 @@ Geschat geheugengebruik van het platform:
 - Het platform is één storingspunt. Voor een PoC is dat aanvaardbaar. Er komt een nachtelijke back-up van de databases en van Garage, en vóór elke grote wijziging een snapshot van de provider.
 - De profielen houden splitsen later eenvoudig. In productie ligt een scheiding van opslag, rekenkracht en governance voor de hand.
 - Bij deze prijsklasse wordt processorkracht vaak gedeeld met andere klanten. Voor de PoC is dat geen bezwaar, maar metingen aan prestaties zeggen dan weinig.
-- De prijzen gelden de eerste 24 maanden: samen € 24,40 per maand zonder btw. Daarna gelden de normale prijzen.
+- De prijzen gelden de eerste 24 maanden: samen € 26,00 per maand zonder btw (VPS 12 en VPS 6). Daarna gelden de normale prijzen.
 - Alle instellingen staan in de repo of in `.env`. Een andere partij kan de servers opnieuw opbouwen zonder kennis die alleen bij ons ligt.
 
 ## Overwogen
