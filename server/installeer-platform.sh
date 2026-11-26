@@ -151,7 +151,7 @@ fi
 D="$(waarde DOMEIN)"
 cat <<EOF
 
-  Portaal:      https://portaal.$D/   (inloggen via Keycloak; noodaccount op /emergency)
+  Portaal:      https://admin.$D/   (inloggen via Keycloak; noodaccount op /emergency)
   Startpagina:  https://$D/
   Dagster:      https://dagster.$D/
   Lakekeeper:   https://catalogus.$D/ui/

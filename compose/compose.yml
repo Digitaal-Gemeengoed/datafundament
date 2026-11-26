@@ -198,7 +198,7 @@ services:
     pull_policy: build
     command: ["node", "backend/dist/cli.js", "migreer"]
     environment: &portaal-omgeving
-      BEHEER_HOST: portaal.${DOMEIN}
+      BEHEER_HOST: admin.${DOMEIN}
       ADMIN_SECRET: ${PORTAAL_ADMIN_GEHEIM:?}
       DATABASE_URL: postgres://df_portaal_app:${PORTAAL_APP_WACHTWOORD:?}@db:5432/df_portaal
       DATABASE_URL_EIGENAAR: postgres://df_portaal:${PORTAAL_DB_WACHTWOORD:?}@db:5432/df_portaal

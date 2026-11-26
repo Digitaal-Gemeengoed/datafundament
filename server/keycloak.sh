@@ -29,7 +29,7 @@ zet() {  # NAAM WAARDE: vervangen of toevoegen
   printf '%s=%s\n' "$1" "$2" >> "$ENV"
 }
 DOMEIN="$(waarde DOMEIN)"
-PORTAAL="https://portaal.$DOMEIN"
+PORTAAL="https://admin.$DOMEIN"
 R=datafundament
 
 kc() { docker compose exec -T keycloak /opt/keycloak/bin/kcadm.sh "$@" --config /tmp/df-kcadm.config; }
@@ -69,7 +69,11 @@ if [ -z "$ID" ]; then
   ID="$(kc get clients -r $R -q clientId=df-portaal --fields id | jq -r '.[0].id')"
   ok "Client df-portaal aangemaakt"
 else
-  ok "Client df-portaal bestaat al"
+  # Adressen altijd bijwerken, zodat een nieuwe naam voor het portaal meteen werkt.
+  kc update "clients/$ID" -r $R \
+    -s "redirectUris=[\"$PORTAAL/api/auth/terug\"]" -s "webOrigins=[\"$PORTAAL\"]" -s "rootUrl=$PORTAAL" \
+    -s "attributes.\"post.logout.redirect.uris\"=$PORTAAL/" >/dev/null
+  ok "Client df-portaal bestaat al; adressen gezet op $PORTAAL"
 fi
 
 # --- AMR-mapper ----------------------------------------------------------------------

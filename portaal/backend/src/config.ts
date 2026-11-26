@@ -26,7 +26,7 @@ export function geheim(env: NodeJS.ProcessEnv, naam: string, minimaal: number): 
 }
 
 export interface Config {
-  /** De enige hostnaam waarop het portaal antwoordt, bijvoorbeeld portaal.datafundament.haarlem.dev. */
+  /** De enige hostnaam waarop het portaal antwoordt, bijvoorbeeld admin.datafundament.haarlem.dev. */
   host: string;
   /** Het eigen adres, https://<host>; ook de verplichte Origin bij wijzigende verzoeken. */
   herkomst: string;

@@ -126,7 +126,7 @@ De ingestie van de bron draait elke 5 minuten.
 
 ## 8. Portaal, Keycloak en de kluis (op dfc)
 
-DNS: `portaal.datafundament.haarlem.dev` en `id.datafundament.haarlem.dev` vallen onder het wildcard-record.
+DNS: `admin.datafundament.haarlem.dev` en `id.datafundament.haarlem.dev` vallen onder het wildcard-record.
 
 ```
 sudo /opt/datafundament/server/installeer-platform.sh
@@ -144,7 +144,7 @@ Daarna:
    ```
    sudo docker compose -f /opt/datafundament/compose/compose.yml run --rm portaal-migreer node backend/dist/cli.js nood-instellen
    ```
-2. Inloggen op `https://portaal.datafundament.haarlem.dev/emergency`.
+2. Inloggen op `https://admin.datafundament.haarlem.dev/emergency`.
 3. Maak een groep met superadmin en een account met het e-mailadres van je Keycloak-gebruiker.
 4. Daarna log je gewoon in via Keycloak. De eerste keer stel je je eigen wachtwoord en een authenticator-app in.
 

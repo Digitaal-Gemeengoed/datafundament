@@ -2,7 +2,7 @@
 
 Het fundament van het portaal van het Datafundament, overgenomen uit het beheerportaal van de Office Assistent (`oa-beheer`, commit `8ac3a1d`): mensen, toegang, beveiliging en audit. Wat er voor het Datafundament bij kwam, staat onderaan. Het ontwerp volgt OWASP ASVS niveau 2 en de OWASP Top 10, en blijft eenvoudig genoeg voor één beheerder zonder systeembeheerervaring.
 
-Adres: `portaal.datafundament.haarlem.dev`, achter Caddy (TLS). Stack: Node 22, Fastify, `pg` met alleen geparametriseerde SQL (geen ORM), PostgreSQL 16, React met NL Design System, Argon2id. Eén image met backend en frontend.
+Adres: `admin.datafundament.haarlem.dev`, achter Caddy (TLS). Stack: Node 22, Fastify, `pg` met alleen geparametriseerde SQL (geen ORM), PostgreSQL 16, React met NL Design System, Argon2id. Eén image met backend en frontend.
 
 ## Afwijkingen van de oorspronkelijke opdracht
 
@@ -11,7 +11,7 @@ Adres: `portaal.datafundament.haarlem.dev`, achter Caddy (TLS). Stack: Node 22, 
 | Python, FastAPI, Vue | TypeScript, Fastify, React met NL Design System | Eén stack met de rest van de Office Assistent (OA-ADR-001); minder onderhoud voor Open WebConcept. |
 | Eigen wachtwoorden, uitnodigingslink om een wachtwoord te kiezen, code per e-mail één keer per dag per apparaat, wachtwoordherstel per e-mail | Inloggen via Keycloak (OIDC) met tweede factor in Keycloak; het portaal vraagt bij elke aanmelding opnieuw wachtwoord en code (`prompt=login`); de uitnodiging is een e-mail met het adres | De mensen van de gemeente staan al in Keycloak (OA-ADR-004: identiteit uit Keycloak, rechten in het portaal). Eén plek voor wachtwoorden en tweede factor. Strenger dan één code per dag. |
 | Pogingen beperkt per e-mail en per adres | Voor het noodaccount per netwerkadres; voor gewone accounts doet Keycloak dat (brute-force-detectie in de realm) | Het portaal ziet geen wachtwoorden meer. |
-| `admin.haarlem.dev` | `portaal.datafundament.<domein>` (`portaal.datafundament.haarlem.dev`) | Op verzoek. |
+| `admin.haarlem.dev` | `admin.datafundament.<domein>` (`admin.datafundament.haarlem.dev`) | Op verzoek. |
 | Op een eigen server | Op VPS 1, naast de integratielaag, met een eigen database | Op verzoek; de database is niet van buiten bereikbaar. |
 
 Wat het portaal **niet** van Keycloak overneemt: groepen, rechten, niveau en status. Die staan alleen in het portaal, worden bij elke aanvraag gelezen, en een account dat hier geblokkeerd is, komt er niet in, ook al werkt het in Keycloak.

@@ -9,7 +9,7 @@ const PG_HOST = process.env.TEST_PG_HOST ?? "/tmp";
 const PG_POORT = process.env.TEST_PG_POORT ?? "55432";
 const SERVER = `postgresql://beheer@/postgres?host=${encodeURIComponent(PG_HOST)}&port=${PG_POORT}`;
 
-export const HOST = "portaal.datafundament.test.nl";
+export const HOST = "admin.datafundament.test.nl";
 export const HERKOMST = `https://${HOST}`;
 export const GEHEIM = "k3J9-xQ2v!Lm8Rt5Zp1Wc7Yh4Nb6Fd0Gs";
 

@@ -24,7 +24,7 @@ TEST_PG_HOST=/tmp npm test     # een PostgreSQL met superuser 'beheer' op poort 
 
 ## Uitrol
 
-Op dfc via `compose/compose.yml` (diensten `portaal-migreer` en `portaal`), achter Caddy op `portaal.datafundament.haarlem.dev`. `server/installeer-platform.sh` maakt de database en de geheimen; `server/keycloak.sh` richt Keycloak in en koppelt het portaal. Het noodaccount instellen:
+Op dfc via `compose/compose.yml` (diensten `portaal-migreer` en `portaal`), achter Caddy op `admin.datafundament.haarlem.dev`. `server/installeer-platform.sh` maakt de database en de geheimen; `server/keycloak.sh` richt Keycloak in en koppelt het portaal. Het noodaccount instellen:
 
 ```
 sudo docker compose -f /opt/datafundament/compose/compose.yml run --rm portaal-migreer node backend/dist/cli.js nood-instellen

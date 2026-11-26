@@ -46,7 +46,7 @@ catalogus.{$DOMEIN} {
 
 # Het portaal: eigen inlog via Keycloak (met tweede factor) en een noodaccount.
 # Geen wachtwoord van Caddy ervoor; het portaal zet zelf zijn beveiligingskoppen.
-portaal.{$DOMEIN} {
+admin.{$DOMEIN} {
 	header -Server
 	header Strict-Transport-Security "max-age=31536000"
 	reverse_proxy portaal:4300
