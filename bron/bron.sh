@@ -40,7 +40,7 @@ start() {
   ok "De bron draait op $(grep '^WG_ADRES=' .env | cut -d= -f2):5432"
 }
 
-werkbank() { docker compose --profile werk run --rm -T werkbank "$@"; }
+werkbank() { docker compose --profile werk run --build --rm -T werkbank "$@"; }
 
 case "${1:-help}" in
   start) start ;;
