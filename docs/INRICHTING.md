@@ -124,6 +124,44 @@ Aan het eind toont het de adressen en het wachtwoord voor de websites. Opnieuw d
 
 De ingestie van de bron draait elke 5 minuten.
 
+## 8. Portaal, Keycloak en de kluis (op dfc)
+
+DNS: `portaal.datafundament.haarlem.dev` en `id.datafundament.haarlem.dev` vallen onder het wildcard-record.
+
+```
+sudo /opt/datafundament/server/installeer-platform.sh
+```
+
+Wat het script doet:
+
+- de databases voor Keycloak, het portaal en de kluis aanmaken;
+- Keycloak en het portaal starten;
+- bij de eerste keer `server/keycloak.sh` draaien, dat vraagt of je een Keycloak-gebruiker voor jezelf wilt.
+
+Daarna:
+
+1. Het noodaccount instellen. Je krijgt het wachtwoord en het TOTP-geheim één keer te zien:
+   ```
+   sudo docker compose -f /opt/datafundament/compose/compose.yml run --rm portaal-migreer node backend/dist/cli.js nood-instellen
+   ```
+2. Inloggen op `https://portaal.datafundament.haarlem.dev/emergency`.
+3. Maak een groep met superadmin en een account met het e-mailadres van je Keycloak-gebruiker.
+4. Daarna log je gewoon in via Keycloak. De eerste keer stel je je eigen wachtwoord en een authenticator-app in.
+
+**Eén keer bij de overstap naar pseudoniemen (DF-ADR-015).** De ruwe lagen van daarvoor bevatten BSN's en namen. Leeg ze; de ingestie laadt daarna alles opnieuw, gepseudonimiseerd:
+
+```
+sudo docker compose -f /opt/datafundament/compose/compose.yml exec werk python -m beheer.opnieuw_laden --ja
+```
+
+Het beheerscherm van Keycloak is van buiten dicht. Je bereikt het via een SSH-tunnel:
+
+```
+ssh -L 8088:127.0.0.1:8088 beheer@207.180.253.52
+```
+
+Ga daarna naar `http://localhost:8088/admin` (gebruiker `beheer`; het wachtwoord staat als `KC_BEHEERDER_WACHTWOORD` in `compose/.env`).
+
 ## Daarna
 
 - **DNS:** het domein is `datafundament.haarlem.dev`. Twee A-records, beide naar 207.180.253.52 (dfc):

@@ -1,6 +1,6 @@
 # DF-ADR-013 — Een portaal op het fundament van oa-beheer
 
-- **Status:** voorgesteld
+- **Status:** aanvaard (26 november 2026)
 - **Datum:** 26 november 2026
 - **Voorgesteld door:** Claude, op vraag van Erik Hoekstra
 
@@ -49,3 +49,18 @@ Daar komen de pagina's voor het eigen domein bovenop.
 - **Geen portaal, alleen de schermen van de onderdelen:** geen maatwerk, maar ook geen overzicht en geen aanvraagstroom. En inloggen per onderdeel.
 - **Een kant-en-klaar ontwikkelaarsportaal (Backstage):** krachtig, maar zwaar, en een eigen pluginmodel in een derde taal.
 - **De catalogus van OpenMetadata als portaal:** goed voor dataproducten, niet voor platformbeheer en de toegangsstroom.
+
+## Aanvulling (26 november 2026): de eerste versie
+
+Erik Hoekstra besloot met het portaal te beginnen, met daarin ook de functies voor verwijderen (DF-ADR-015).
+
+- **Code:** in `portaal/` in deze repo, niet in een eigen repo. Het fundament komt uit `oa-beheer` commit `8ac3a1d` (0.16.0, vóór de gemeenten); metadatamodel, classificatie en anonimiseren zijn weggelaten. Licentie van die map: EUPL-1.2, zoals `oa-beheer`.
+- **Functies van de eerste versie:**
+  - **Platform:** gezondheid van Dagster, Lakekeeper, Trino en Garage; versheid per ruwe laag; laatste runs.
+  - **Dataproducten:** alle assets uit Dagster per laag (bron, ruw, uniform, dataproduct), met soort, eigenaar, laatste materialisatie en herkomst.
+  - **Toegang tot data:** aanvragen met doel, grondslag en einddatum; beoordelen door een ander; intrekken. De toekenningen komen als regels voor Trino beschikbaar (file-based access control), om via Git in te voeren.
+  - **Verwijderverzoeken:** indienen, beoordelen door een tweede persoon, uitvoeren via de job `verwijderen` in Dagster, en het bewijs vastleggen (DF-ADR-015).
+  - **Accounts, groepen en rechten:** uit het fundament, met zes nieuwe rechten.
+- **Vier ogen** zit in de code en in de database: een CHECK weigert dat de beoordelaar ook de aanvrager is. Aanvragen en verzoeken kunnen niet worden verwijderd, en een beoordeling ligt vast (triggers).
+- **De OpenMetadata-kant** van Dataproducten volgt als OpenMetadata er is (DF-ADR-007). Tot dan is Dagster de bron.
+- **Afdwingen van toegang** in Trino volgt als Trino via Keycloak inlogt. Tot dan is de toegangspagina het register, en zijn de regels een voorstel.

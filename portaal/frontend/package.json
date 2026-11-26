@@ -1,0 +1,24 @@
+{
+  "name": "df-portaal-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "dev": "vite"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "typescript": "^5.9.3",
+    "vite": "^8.3.6"
+  },
+  "dependencies": {
+    "@nl-design-system-unstable/haarlem-design-tokens": "1.0.0",
+    "@utrecht/component-library-css": "^9.0.16",
+    "@utrecht/component-library-react": "^15.0.1",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  }
+}

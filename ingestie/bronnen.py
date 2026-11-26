@@ -83,8 +83,25 @@ def bron_url():
             f"@{os.environ.get('BRON_HOST', '10.67.0.2')}:5432/bron")
 
 
-def source(bron, laag):
-    """De bron als dlt-source, met de schrijfwijze van de laag."""
+def pseudonimiseer(src, bron, kluis=None):
+    """Pseudoniemen in plaats van BSN's, en namen en A-nummers eruit (DF-ADR-015)."""
+    from ingestie import pseudoniem  # pylint: disable=import-outside-toplevel
+    k = None
+    resources = src.resources.values() if hasattr(src, "resources") else [src]
+    for res in resources:
+        if not pseudoniem.regels(bron, res.name):
+            continue
+        k = k or kluis or pseudoniem.Kluis()
+        res.add_map(pseudoniem.pseudonimiseer(bron, res.name, k)).add_filter(lambda i: i is not None)
+    return src
+
+
+def source(bron, laag, kluis=None):
+    """De bron als dlt-source, met de schrijfwijze van de laag, gepseudonimiseerd."""
+    return pseudonimiseer(_source(bron, laag), bron, kluis)
+
+
+def _source(bron, laag):
     soort = BRONNEN[bron].get("soort", "database")
     if soort == "api":
         from ingestie import zaken_api  # pylint: disable=import-outside-toplevel
@@ -93,7 +110,10 @@ def source(bron, laag):
         from ingestie import landing  # pylint: disable=import-outside-toplevel
         return landing.source(laag, stand=laag.endswith("_stand"))
     b = BRONNEN[bron]
-    src = sql_database(bron_url(), schema=bron, table_names=alle_tabellen(bron))
+    from ingestie import pseudoniem  # pylint: disable=import-outside-toplevel
+    src = sql_database(bron_url(), schema=bron, table_names=alle_tabellen(bron),
+                       table_adapter_callback=pseudoniem.tabel_adapter(bron),
+                       query_adapter_callback=pseudoniem.query_adapter(bron))
     for t in b["tabellen"]:
         getattr(src, t).apply_hints(
             primary_key="id",

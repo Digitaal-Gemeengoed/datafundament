@@ -30,6 +30,7 @@ Een besluit wordt niet herschreven. Verandert het, dan komt er een nieuw ADR, en
 | [009](DF-ADR-009-twee-vps-platform-en-bron.md) | Twee VPS'en: platform en bron, verbonden via WireGuard | aanvaard |
 | [010](DF-ADR-010-testdata.md) | Alleen test- en open data: VrijBRP, BAG, CBS | aanvaard |
 | [011](DF-ADR-011-ai-als-versneller.md) | AI als versneller; het resultaat is gewone, leesbare code | aanvaard |
-| [012](DF-ADR-012-identiteit-via-keycloak.md) | Identiteit via een eigen Keycloak | voorgesteld |
-| [013](DF-ADR-013-portaal-op-fundament-oa-beheer.md) | Een portaal op het fundament van oa-beheer | voorgesteld |
+| [012](DF-ADR-012-identiteit-via-keycloak.md) | Identiteit via een eigen Keycloak | aanvaard |
+| [013](DF-ADR-013-portaal-op-fundament-oa-beheer.md) | Een portaal op het fundament van oa-beheer | aanvaard |
 | [014](DF-ADR-014-simulatie-en-drie-ingestiepatronen.md) | Een gesimuleerd jaar, en drie manieren waarop data binnenkomt | aanvaard |
+| [015](DF-ADR-015-pseudonimisering-en-verwijderen.md) | Pseudoniemen bij de poort, een sleutelkluis, en verwijderen met crypto-shredding | aanvaard |

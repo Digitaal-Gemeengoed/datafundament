@@ -1,5 +1,5 @@
 # Caddy op dfc: TLS (Let's Encrypt) en de enige ingang (DF-ADR-009).
-# Zolang het een PoC is, vraagt elke naam hetzelfde wachtwoord. Keycloak volgt (DF-ADR-012).
+# De onderdelen vragen nog hetzelfde wachtwoord; het portaal logt in via Keycloak (DF-ADR-012).
 # Namen: {$DOMEIN} en *.{$DOMEIN} wijzen naar dfc.
 
 (afgeschermd) {
@@ -42,4 +42,21 @@ catalogus.{$DOMEIN} {
 	reverse_proxy lakekeeper:8181 {
 		header_up -Authorization
 	}
+}
+
+# Het portaal: eigen inlog via Keycloak (met tweede factor) en een noodaccount.
+# Geen wachtwoord van Caddy ervoor; het portaal zet zelf zijn beveiligingskoppen.
+portaal.{$DOMEIN} {
+	header -Server
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy portaal:4300
+}
+
+# Keycloak: alleen het inloggen. Het beheerscherm is van buiten dicht (SSH-tunnel).
+id.{$DOMEIN} {
+	header -Server
+	header Strict-Transport-Security "max-age=31536000"
+	@beheer path /admin /admin/*
+	respond @beheer 404
+	reverse_proxy keycloak:8080
 }

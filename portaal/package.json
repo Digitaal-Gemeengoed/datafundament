@@ -1,0 +1,13 @@
+{
+  "name": "df-portaal",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Portaal van het Datafundament: platformbeheer, dataproducten, toegang en verwijderverzoeken. Fundament uit oa-beheer.",
+  "license": "EUPL-1.2",
+  "workspaces": ["backend", "frontend"],
+  "scripts": {
+    "build": "npm run build -w frontend && npm run build -w backend",
+    "test": "npm test -w backend"
+  },
+  "repository": { "type": "git", "url": "git+https://github.com/Digitaal-Gemeengoed/datafundament.git" }
+}

@@ -37,5 +37,20 @@ def snapshots_opruimen(dagen=7, log=print):
     return totaal
 
 
+def alle_oude_snapshots_weg(idents, log=print):
+    """Alle snapshots behalve de huidige, in de genoemde tabellen (na een verwijdering)."""
+    catalogus = load_catalog("default")
+    totaal = 0
+    for ident in idents:
+        tabel = catalogus.load_table(tuple(ident))
+        huidig = tabel.current_snapshot()
+        oud = [s.snapshot_id for s in tabel.snapshots() if huidig is None or s.snapshot_id != huidig.snapshot_id]
+        if oud:
+            tabel.maintenance.expire_snapshots().by_ids(oud).commit()
+            totaal += len(oud)
+    log(f"{totaal} oude snapshots opgeruimd in {len(idents)} tabellen")
+    return totaal
+
+
 if __name__ == "__main__":
     snapshots_opruimen(int(sys.argv[1]) if len(sys.argv) > 1 else 7)
