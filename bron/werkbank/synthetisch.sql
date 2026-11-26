@@ -94,6 +94,10 @@ CREATE TABLE IF NOT EXISTS woz.belanghebbende (
   gewijzigd_op timestamptz NOT NULL DEFAULT now()
 );
 
+-- Bijgekomen na de eerste versie (DF-ADR-014): ook in een bestaande database.
+ALTER TABLE woz.belanghebbende ADD COLUMN IF NOT EXISTS begindatum date;
+ALTER TABLE woz.belanghebbende ADD COLUMN IF NOT EXISTS einddatum date;
+
 -- === Belastingen: aanslagen ========================================================
 CREATE SCHEMA IF NOT EXISTS belastingen;
 
