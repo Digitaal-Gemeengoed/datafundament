@@ -58,8 +58,8 @@ else
 fi
 
 meld "Images ophalen en de code bouwen (eerste keer: een paar minuten)"
-docker compose pull -q --ignore-buildable
 docker compose build -q werk
+docker compose pull -q --ignore-buildable db garage lakekeeper lakekeeper-migratie trino caddy
 ok "Klaar"
 
 meld "Database en opslag"

@@ -123,6 +123,7 @@ services:
       context: ..
       dockerfile: werk/Dockerfile
     image: datafundament-werk
+    pull_policy: build
     restart: unless-stopped
     command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "orkestratie.definitions"]
     environment: *werk-omgeving
@@ -133,6 +134,8 @@ services:
 
   dagster-webserver:
     image: datafundament-werk
+    # Zelf gebouwd (dienst werk); nooit ophalen.
+    pull_policy: never
     restart: unless-stopped
     command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "/opt/dagster/workspace.yaml"]
     environment: *werk-omgeving
@@ -141,6 +144,8 @@ services:
 
   dagster-daemon:
     image: datafundament-werk
+    # Zelf gebouwd (dienst werk); nooit ophalen.
+    pull_policy: never
     restart: unless-stopped
     command: ["dagster-daemon", "run", "-w", "/opt/dagster/workspace.yaml"]
     environment: *werk-omgeving
