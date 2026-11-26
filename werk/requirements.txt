@@ -1,0 +1,13 @@
+# Werk-image: ingestie (dlt), transformatie (dbt-duckdb) en orkestratie (Dagster).
+# Samen getest op Python 3.13; een nieuwe versie kies je bewust.
+dlt[sql_database,postgres,pyiceberg,s3]==1.32.0
+psycopg2-binary==2.9.13
+duckdb==2.0.1
+pyiceberg==0.12.0
+dbt-core==1.12.7
+dbt-duckdb==1.11.1
+dagster==1.13.31
+dagster-webserver==1.13.31
+dagster-postgres==0.29.31
+dagster-dbt==0.29.31
+requests==2.34.2

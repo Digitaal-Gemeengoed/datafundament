@@ -98,6 +98,32 @@ sudo ./bron.sh status
 
 Zie [`bron/README.md`](../bron/README.md). De bron luistert alleen op 10.67.0.2 en laat alleen dfc toe.
 
+## 7. Het platform installeren (op dfc)
+
+Eerst de bron op dfw (stap 6). Dan op dfc:
+
+```
+sudo /opt/datafundament/server/installeer-platform.sh
+```
+
+Het script vraagt één keer het wachtwoord van `dlt_lezer` (op dfw: `sudo ./bron.sh dlt-wachtwoord`) en maakt alle andere geheimen zelf, in `compose/.env` (alleen leesbaar voor root). Daarna:
+
+- haalt het de images op (vastgepinde versies) en bouwt de code;
+- start PostgreSQL met PostGIS en Garage, en zet in Garage een eigen sleutel per onderdeel (Lakekeeper en de schrijvers lezen en schrijven, Trino leest alleen);
+- richt Lakekeeper in, met het warehouse `datafundament` op Garage;
+- start Trino, Dagster en Caddy.
+
+Aan het eind toont het de adressen en het wachtwoord voor de websites. Opnieuw draaien kan altijd; geheimen en data blijven staan.
+
+| Adres | Wat |
+|---|---|
+| `https://datafundament.haarlem.dev/` | startpagina |
+| `https://dagster.datafundament.haarlem.dev/` | Dagster: de keten, runs en lineage |
+| `https://catalogus.datafundament.haarlem.dev/ui/` | Lakekeeper: de Iceberg-catalogus |
+| `https://trino.datafundament.haarlem.dev/ui/` | Trino; JDBC `jdbc:trino://trino.datafundament.haarlem.dev:443?SSL=true` |
+
+De ingestie van de bron draait elke 5 minuten.
+
 ## Daarna
 
 - **DNS:** het domein is `datafundament.haarlem.dev`. Twee A-records, beide naar 207.180.253.52 (dfc):
@@ -105,4 +131,4 @@ Zie [`bron/README.md`](../bron/README.md). De bron luistert alleen op 10.67.0.2 
   - `*.datafundament.haarlem.dev`
 
   Caddy haalt per naam een certificaat op. De namen: `datafundament.` (startpagina, later het portaal), `dagster.`, `metadata.` (OpenMetadata), `catalogus.` (Lakekeeper), `trino.` en `id.` (Keycloak). dfw krijgt geen publieke naam.
-- **Software:** de compose-bestanden voor dfc (`kern`, `metadata`, `portaal`) en dfw (de bron) volgen, met een script dat ze installeert en bijwerkt.
+- **Volgt:** dbt (uniforme laag en dataproducten), OpenMetadata, Keycloak.

@@ -1,0 +1,174 @@
+# Het platform op dfc (DF-ADR-009): de kern van het lakehouse.
+#
+#   Garage (S3)         objectopslag, een eigen sleutel per onderdeel (DF-ADR-002)
+#   db                  PostgreSQL met PostGIS: Lakekeeper, Dagster en het datawarehouse (dwh)
+#   Lakekeeper          Iceberg REST-catalogus (DF-ADR-003)
+#   Trino               de enige voordeur voor afnemers (DF-ADR-008)
+#   werk                de code: ingestie (dlt), later dbt; draait als code server voor Dagster
+#   Dagster             webserver en daemon: de regisseur
+#   Caddy               TLS en de enige ingang, met een wachtwoord zolang het een PoC is
+#
+# Installeren en bijwerken: sudo /opt/datafundament/server/installeer-platform.sh
+# Versies zijn vastgepind; zie proeven/iceberg-schrijfpad (DF-ADR-004).
+
+name: datafundament
+
+x-werk-omgeving: &werk-omgeving
+  DAGSTER_PG_USER: dagster
+  DAGSTER_PG_PASSWORD: ${DAGSTER_DB_WACHTWOORD:?}
+  # De bron op dfw, via WireGuard (DF-ADR-006).
+  BRON_HOST: 10.67.0.2
+  DLT_WACHTWOORD: ${DLT_WACHTWOORD:?}
+  # dlt schrijft Iceberg in Garage, met de sleutel van de schrijvers.
+  DESTINATION__FILESYSTEM__BUCKET_URL: s3://lakehouse/warehouse/dlt
+  DESTINATION__FILESYSTEM__CREDENTIALS__AWS_ACCESS_KEY_ID: ${GARAGE_SCHRIJVER_SLEUTEL:?}
+  DESTINATION__FILESYSTEM__CREDENTIALS__AWS_SECRET_ACCESS_KEY: ${GARAGE_SCHRIJVER_GEHEIM:?}
+  DESTINATION__FILESYSTEM__CREDENTIALS__ENDPOINT_URL: http://garage:3900
+  DESTINATION__FILESYSTEM__CREDENTIALS__REGION_NAME: garage
+  DESTINATION__FILESYSTEM__CREDENTIALS__S3_URL_STYLE: path
+  ICEBERG_CATALOG__ICEBERG_CATALOG_TYPE: rest
+  # pyiceberg (voor dlt): Lakekeeper als catalogus "default".
+  PYICEBERG_CATALOG__DEFAULT__TYPE: rest
+  PYICEBERG_CATALOG__DEFAULT__URI: http://lakekeeper:8181/catalog
+  PYICEBERG_CATALOG__DEFAULT__WAREHOUSE: datafundament
+  PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT: http://garage:3900
+  PYICEBERG_CATALOG__DEFAULT__S3__ACCESS_KEY_ID: ${GARAGE_SCHRIJVER_SLEUTEL}
+  PYICEBERG_CATALOG__DEFAULT__S3__SECRET_ACCESS_KEY: ${GARAGE_SCHRIJVER_GEHEIM}
+  PYICEBERG_CATALOG__DEFAULT__S3__REGION: garage
+  # Het datawarehouse (PostGIS), voor dbt.
+  DWH_SCHRIJVER_WACHTWOORD: ${DWH_SCHRIJVER_WACHTWOORD:?}
+
+x-werk-volumes: &werk-volumes
+  - ./dagster/dagster.yaml:/opt/dagster/home/dagster.yaml:ro
+  - ./dagster/workspace.yaml:/opt/dagster/workspace.yaml:ro
+  - dagsteropslag:/opt/dagster/home/storage
+  - dltstaat:/var/lib/dlt
+
+services:
+  db:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: beheer
+      POSTGRES_PASSWORD: ${DB_WACHTWOORD:?}
+      # Voor db/20-datafundament.sh: de rollen per onderdeel.
+      LK_DB_WACHTWOORD: ${LK_DB_WACHTWOORD:?}
+      DAGSTER_DB_WACHTWOORD: ${DAGSTER_DB_WACHTWOORD}
+      DWH_SCHRIJVER_WACHTWOORD: ${DWH_SCHRIJVER_WACHTWOORD}
+      DWH_LEZER_WACHTWOORD: ${DWH_LEZER_WACHTWOORD:?}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      # Als los bestand, zodat het init-script van PostGIS zelf blijft draaien.
+      - ./db/20-datafundament.sh:/docker-entrypoint-initdb.d/20-datafundament.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U beheer -d postgres"]
+      interval: 5s
+      retries: 30
+
+  garage:
+    image: dxflrs/garage:v2.5.0@sha256:677e5b758e4425a325b811c425c026bf35a4bf42f7ddbaa773de3f4fd779a5a5
+    restart: unless-stopped
+    # Eén node zonder replicatie; de back-up is de tweede kopie. De standaardsleutel
+    # is die van beheer; de sleutels per onderdeel zet installeer-platform.sh erbij.
+    command: ["/garage", "server", "--single-node", "--default-bucket"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_GEHEIM:?}
+      GARAGE_DEFAULT_ACCESS_KEY: ${GARAGE_BEHEER_SLEUTEL:?}
+      GARAGE_DEFAULT_SECRET_KEY: ${GARAGE_BEHEER_GEHEIM:?}
+      GARAGE_DEFAULT_BUCKET: lakehouse
+    volumes:
+      - ./garage.toml:/etc/garage.toml:ro
+      - garagemeta:/var/lib/garage/meta
+      - garagedata:/var/lib/garage/data
+
+  lakekeeper-migratie:
+    image: &lakekeeper vakamo/lakekeeper@sha256:e5a0e9d3ffecf0c09b2c0bcd2258e9adc2274bf88c1127b2ca08ea02966b5f48
+    command: ["migrate"]
+    environment: &lakekeeper-omgeving
+      LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lakekeeper:${LK_DB_WACHTWOORD}@db:5432/lakekeeper
+      LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lakekeeper:${LK_DB_WACHTWOORD}@db:5432/lakekeeper
+      LAKEKEEPER__PG_ENCRYPTION_KEY: ${LK_SLEUTEL:?}
+      # Nog zonder inlog; alleen bereikbaar binnen dit netwerk en via Caddy met wachtwoord.
+      # Keycloak en rechten per gebruiker volgen (DF-ADR-012).
+      LAKEKEEPER__AUTHZ_BACKEND: allowall
+    depends_on:
+      db: { condition: service_healthy }
+
+  lakekeeper:
+    image: *lakekeeper
+    restart: unless-stopped
+    command: ["serve"]
+    environment: *lakekeeper-omgeving
+    depends_on:
+      lakekeeper-migratie: { condition: service_completed_successfully }
+      garage: { condition: service_started }
+
+  trino:
+    image: trinodb/trino@sha256:2704eb53935af5e582d63d6033e9bf99d20c325e9b0e30b1016ef59a4773979f
+    restart: unless-stopped
+    # De heap van Trino is 80% van deze grens.
+    mem_limit: 8g
+    environment:
+      GARAGE_LEZER_SLEUTEL: ${GARAGE_LEZER_SLEUTEL:?}
+      GARAGE_LEZER_GEHEIM: ${GARAGE_LEZER_GEHEIM:?}
+      DWH_LEZER_WACHTWOORD: ${DWH_LEZER_WACHTWOORD}
+    volumes:
+      - ./trino/config.properties:/etc/trino/config.properties:ro
+      - ../datahub/trino/catalog:/etc/trino/catalog:ro
+    depends_on: [lakekeeper, db]
+
+  # De code als gRPC-server voor Dagster; runs draaien ook hier.
+  werk:
+    build:
+      context: ..
+      dockerfile: werk/Dockerfile
+    image: datafundament-werk
+    restart: unless-stopped
+    command: ["dagster", "api", "grpc", "-h", "0.0.0.0", "-p", "4000", "-m", "orkestratie.definitions"]
+    environment: *werk-omgeving
+    volumes: *werk-volumes
+    depends_on:
+      db: { condition: service_healthy }
+      lakekeeper: { condition: service_started }
+
+  dagster-webserver:
+    image: datafundament-werk
+    restart: unless-stopped
+    command: ["dagster-webserver", "-h", "0.0.0.0", "-p", "3000", "-w", "/opt/dagster/workspace.yaml"]
+    environment: *werk-omgeving
+    volumes: *werk-volumes
+    depends_on: [werk]
+
+  dagster-daemon:
+    image: datafundament-werk
+    restart: unless-stopped
+    command: ["dagster-daemon", "run", "-w", "/opt/dagster/workspace.yaml"]
+    environment: *werk-omgeving
+    volumes: *werk-volumes
+    depends_on: [werk]
+
+  caddy:
+    image: caddy:2.10
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      DOMEIN: ${DOMEIN:?}
+      WEB_GEBRUIKER: ${WEB_GEBRUIKER:?}
+      WEB_WACHTWOORD_HASH: ${WEB_WACHTWOORD_HASH:?}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/start:/srv/start:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on: [dagster-webserver, trino, lakekeeper]
+
+volumes:
+  dbdata:
+  garagemeta:
+  garagedata:
+  dagsteropslag:
+  dltstaat:
+  caddydata:
+  caddyconfig:
