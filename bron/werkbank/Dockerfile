@@ -2,5 +2,5 @@
 FROM python:3.13-slim
 RUN pip install --no-cache-dir --root-user-action=ignore "psycopg[binary]==3.3.9"
 WORKDIR /werk
-COPY brp.py .
+COPY brp.py synthetisch.py synthetisch.sql ./
 ENTRYPOINT ["python", "brp.py"]
