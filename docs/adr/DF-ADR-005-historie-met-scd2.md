@@ -26,3 +26,13 @@ Voor de vraag "wat wisten we op datum X over persoon of object Y" is functionele
 
 - **Alleen time travel:** minder werk, maar het belooft meer dan het waarmaakt.
 - **Snapshots nooit opruimen:** time travel als historie, maar de metadata groeit zonder grens, en de historie hangt af van één catalogus.
+
+## Aanvulling (26 november 2026): de ruwe laag is insert-only
+
+dlt ondersteunt voor Iceberg de strategieën `upsert` en `insert-only`, niet `scd2`. Het besluit voor de **ruwe laag** verandert daarom, het doel niet:
+
+- **`ruw_brp`, insert-only:** elke versie van een rij uit de bron wordt toegevoegd, met het laadmoment van dlt (`_dlt_load_id`). Er wordt nooit iets bijgewerkt of verwijderd. Dit is de volledige historie op ruw niveau, en beter te controleren dan SCD2: een logboek zonder updates.
+- **`ruw_brp_stand`, upsert op `id`:** de huidige stand van de bron, voor wie alleen dat nodig heeft.
+- **De uniforme laag** maakt de SCD2-tijdlijn met geldigheidsdatums, met dbt-snapshots of een model op `ruw_brp`.
+
+**Bewezen** in [`proeven/dlt-ingestie`](../../proeven/dlt-ingestie/README.md) op dfc: na een verhuizing op dfw bevat `ruw_brp` het oude adres twee keer (actueel, en daarna niet meer actueel) plus het nieuwe adres. `ruw_brp_stand` heeft het oude adres bijgewerkt. Trino leest beide.
