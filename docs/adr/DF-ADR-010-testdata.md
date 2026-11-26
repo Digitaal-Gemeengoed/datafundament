@@ -57,3 +57,10 @@ Een database of dump van vrijBRP zelf staat niet openbaar, en de hele vrijBRP Ba
 
 - De personen wonen volgens de testdata vooral in Stichtse Vecht, Den Haag, Rotterdam en Amsterdam, en deels in fictieve testgemeenten van de RvIG. BAG, CBS-buurten en meldingen volgen daarom die gemeenten, niet Haarlem.
 - vrijBRP staat in de Softwarecatalogus inmiddels bij Shift2. Wie later een echte vrijBRP-database als bron wil gebruiken, kan daar terecht.
+
+## Aanvulling (26 november 2026): geodata
+
+- **Adressen naar coördinaten:** de actuele adressen uit de ruwe laag worden opgezocht in de PDOK Locatieserver (BAG). Die geeft een punt in RD en de buurtcode. Alleen nieuwe adressen worden opgezocht. Een adres dat niet in de BAG staat (fictief in de testdata), krijgt `gevonden = false`.
+- **Buurten:** CBS Wijken en Buurten 2025 via de OGC API van PDOK (CC-BY 4.0), alleen voor de gemeenten die de Locatieserver teruggeeft. Met kerncijfers, zoals het aantal inwoners.
+- **Dataproduct:** testpersonen per buurt, naast het aantal inwoners volgens CBS. Het staat in het lakehouse en in PostGIS (met geometrie, sleutel en ruimtelijke index, voor QGIS).
+- Een volledige BAG (tientallen GB) is voor de PoC niet nodig.

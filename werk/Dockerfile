@@ -1,5 +1,5 @@
-# Eén image voor de code van het Datafundament: ingestie, transformatie,
-# orkestratie en inrichting. Dagster (webserver, daemon, code) draait ook hierop.
+# Eén image voor de code van het Datafundament: ingestie (dlt), transformatie
+# (dbt), orkestratie en inrichting. Dagster (webserver, daemon, code) draait ook hierop.
 # Bouwen vanuit de root van de repo: docker build -f werk/Dockerfile .
 FROM python:3.13-slim
 
@@ -11,9 +11,17 @@ WORKDIR /app
 COPY ingestie/ ingestie/
 COPY orkestratie/ orkestratie/
 COPY beheer/ beheer/
+COPY transformatie/ transformatie/
 ENV PYTHONPATH=/app \
     DAGSTER_HOME=/opt/dagster/home \
-    DLT_DATA_DIR=/var/lib/dlt
+    DLT_DATA_DIR=/var/lib/dlt \
+    DBT_PROFILES_DIR=/app/transformatie
 
-RUN mkdir -p /opt/dagster/home/storage /var/lib/dlt && chown -R werk /opt/dagster /var/lib/dlt
+RUN mkdir -p /opt/dagster/home/storage /var/lib/dlt \
+ && chown -R werk /opt/dagster /var/lib/dlt /app/transformatie
 USER werk
+
+# De DuckDB-extensies vooraf, zodat een run niets hoeft te downloaden.
+RUN python -c "import duckdb; [duckdb.install_extension(e) for e in ('httpfs', 'iceberg', 'spatial', 'postgres')]"
+# Het manifest van dbt, voor Dagster (lineage en een asset per model).
+RUN cd transformatie && rm -rf target && dbt parse --no-partial-parse --quiet

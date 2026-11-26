@@ -1,0 +1,57 @@
+version: 2
+
+# Kwaliteitsregels (dbt-tests). Ze draaien bij elke run; de uitkomst staat in
+# Dagster en later in OpenMetadata (DF-ADR-007).
+models:
+  - name: persoon
+    description: De actuele stand van elke persoon, met leesbare waarden.
+    columns:
+      - name: pl_id
+        tests: [unique, not_null]
+      # Testdata kan hier afwijken; een waarschuwing, geen fout.
+      - name: bsn
+        tests:
+          - unique: {config: {severity: warn}}
+          - not_null: {config: {severity: warn}}
+      - name: geslacht_code
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['M', 'V', 'O']
+              config: {severity: warn}
+
+  - name: verblijfplaats_historie
+    description: Tijdlijn (SCD2) van elke verblijfplaats, uit de insert-only ruwe laag.
+    columns:
+      - name: record_id
+        tests: [not_null]
+      - name: geldig_vanaf
+        tests: [not_null]
+
+  - name: adres
+    description: Actueel Nederlands adres per persoon, met locatie en buurt uit de BAG.
+    columns:
+      - name: pl_id
+        tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('persoon')
+                field: pl_id
+              config: {severity: warn}
+
+  - name: buurt
+    description: Buurten van CBS met kerncijfers en geometrie (RD).
+    columns:
+      - name: buurtcode
+        tests: [unique, not_null]
+
+  - name: testpersonen_per_buurt
+    description: Dataproduct, testpersonen per buurt naast de kerncijfers van CBS.
+    columns:
+      - name: buurtcode
+        tests: [unique, not_null]
+
+  - name: dwh_testpersonen_per_buurt
+    description: Hetzelfde dataproduct in PostGIS, met geometrie, sleutel en ruimtelijke index.

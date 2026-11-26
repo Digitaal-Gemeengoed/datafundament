@@ -4,7 +4,7 @@
 #   db                  PostgreSQL met PostGIS: Lakekeeper, Dagster en het datawarehouse (dwh)
 #   Lakekeeper          Iceberg REST-catalogus (DF-ADR-003)
 #   Trino               de enige voordeur voor afnemers (DF-ADR-008)
-#   werk                de code: ingestie (dlt), later dbt; draait als code server voor Dagster
+#   werk                de code: ingestie (dlt) en transformatie (dbt); code server voor Dagster
 #   Dagster             webserver en daemon: de regisseur
 #   Caddy               TLS en de enige ingang, met een wachtwoord zolang het een PoC is
 #
@@ -35,7 +35,10 @@ x-werk-omgeving: &werk-omgeving
   PYICEBERG_CATALOG__DEFAULT__S3__ACCESS_KEY_ID: ${GARAGE_SCHRIJVER_SLEUTEL}
   PYICEBERG_CATALOG__DEFAULT__S3__SECRET_ACCESS_KEY: ${GARAGE_SCHRIJVER_GEHEIM}
   PYICEBERG_CATALOG__DEFAULT__S3__REGION: garage
-  # Het datawarehouse (PostGIS), voor dbt.
+  # dbt (transformatie/profiles.yml): DuckDB schrijft Iceberg met dezelfde sleutel,
+  # en dataproducten in het datawarehouse (PostGIS).
+  GARAGE_SCHRIJVER_SLEUTEL: ${GARAGE_SCHRIJVER_SLEUTEL}
+  GARAGE_SCHRIJVER_GEHEIM: ${GARAGE_SCHRIJVER_GEHEIM}
   DWH_SCHRIJVER_WACHTWOORD: ${DWH_SCHRIJVER_WACHTWOORD:?}
 
 x-werk-volumes: &werk-volumes

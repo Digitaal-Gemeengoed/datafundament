@@ -1,0 +1,31 @@
+# DuckDB rekent in het geheugen van de werk-container; de data staat in Iceberg
+# (Lakekeeper op Garage) en in PostGIS. Geheimen komen uit de omgeving.
+datafundament:
+  target: platform
+  outputs:
+    platform:
+      type: duckdb
+      path: /tmp/dbt.duckdb
+      threads: 1
+      extensions: [httpfs, iceberg, spatial, postgres]
+      secrets:
+        - type: s3
+          key_id: "{{ env_var('GARAGE_SCHRIJVER_SLEUTEL', '') }}"
+          secret: "{{ env_var('GARAGE_SCHRIJVER_GEHEIM', '') }}"
+          endpoint: garage:3900
+          url_style: path
+          use_ssl: "false"
+          region: garage
+      attach:
+        # Het lakehouse: dezelfde ATTACH als in proeven/iceberg-schrijfpad.
+        - path: datafundament
+          alias: lakehouse
+          type: iceberg
+          options:
+            endpoint: http://lakekeeper:8181/catalog
+            authorization_type: none
+            access_delegation_mode: none
+        # Het datawarehouse (PostGIS), voor dataproducten met strikte integriteit.
+        - path: "host=db dbname=dwh user=dwh_schrijver password={{ env_var('DWH_SCHRIJVER_WACHTWOORD', '') }}"
+          alias: dwh
+          type: postgres
