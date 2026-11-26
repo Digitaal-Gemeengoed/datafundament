@@ -1,0 +1,35 @@
+# Proef: dlt van de bron (dfw) naar Iceberg (Lakekeeper op Garage). Gebruikt de
+# opstelling van proeven/iceberg-schrijfpad, die moet draaien.
+#
+# Starten: ./proef.sh
+
+name: df-proef-ingestie
+
+services:
+  ingestie:
+    build: .
+    environment:
+      DLT_WACHTWOORD: ${DLT_WACHTWOORD:?}
+      PROEF_BSN: ${PROEF_BSN:-999997889}
+      # dlt: Iceberg in Garage, met Lakekeeper als REST-catalogus.
+      DESTINATION__FILESYSTEM__BUCKET_URL: s3://lakehouse/warehouse/dlt
+      DESTINATION__FILESYSTEM__CREDENTIALS__AWS_ACCESS_KEY_ID: ${GARAGE_SLEUTEL:?}
+      DESTINATION__FILESYSTEM__CREDENTIALS__AWS_SECRET_ACCESS_KEY: ${GARAGE_GEHEIM:?}
+      DESTINATION__FILESYSTEM__CREDENTIALS__ENDPOINT_URL: http://garage:3900
+      DESTINATION__FILESYSTEM__CREDENTIALS__REGION_NAME: garage
+      DESTINATION__FILESYSTEM__CREDENTIALS__S3_URL_STYLE: path
+      ICEBERG_CATALOG__ICEBERG_CATALOG_TYPE: rest
+      # pyiceberg: catalogus "default" (gebruikt door dlt en door de controles).
+      PYICEBERG_CATALOG__DEFAULT__TYPE: rest
+      PYICEBERG_CATALOG__DEFAULT__URI: http://lakekeeper:8181/catalog
+      PYICEBERG_CATALOG__DEFAULT__WAREHOUSE: datafundament
+      PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT: http://garage:3900
+      PYICEBERG_CATALOG__DEFAULT__S3__ACCESS_KEY_ID: ${GARAGE_SLEUTEL}
+      PYICEBERG_CATALOG__DEFAULT__S3__SECRET_ACCESS_KEY: ${GARAGE_GEHEIM}
+      PYICEBERG_CATALOG__DEFAULT__S3__REGION: garage
+    networks: [schrijfpad]
+
+networks:
+  schrijfpad:
+    external: true
+    name: df-proef-schrijfpad_default
