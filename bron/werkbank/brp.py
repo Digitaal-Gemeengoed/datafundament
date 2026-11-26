@@ -15,6 +15,9 @@ historie. En het kan de bron laten veranderen, voor de demo van CDC.
     python brp.py synthetisch            synthetische bronnen rond de BRP (bag, woz, ...)
     python brp.py melding                nieuwe melding openbare ruimte (demo CDC)
     python brp.py zaak-afhandelen        een open zaak afhandelen (demo CDC)
+    python brp.py simuleer [TOT]         de simulatieklok bijwerken tot nu (DF-ADR-014)
+    python brp.py simulatie-status       tot waar de klok is, en wat er laatst gebeurde
+    python brp.py export-belastingen     nachtelijke export van de belastingen naar de landingsbucket
 
 Zonder BSN kiest het script een geschikte persoon. Verbinding: de PG*-
 omgevingsvariabelen (PGHOST, PGUSER, PGPASSWORD, PGDATABASE).
@@ -376,6 +379,17 @@ def main(args):
         kolom_erbij()
     elif opdracht == "status":
         status()
+    elif opdracht in ("simuleer", "simulatie-status"):
+        import simulatie  # pylint: disable=import-outside-toplevel
+        with verbind() as con:
+            if opdracht == "simuleer":
+                simulatie.simuleer(con, args[1] if len(args) > 1 else None)
+            else:
+                simulatie.status(con)
+    elif opdracht == "export-belastingen":
+        import export  # pylint: disable=import-outside-toplevel
+        with verbind() as con:
+            export.belastingen(con)
     elif opdracht in ("synthetisch", "melding", "zaak-afhandelen"):
         import synthetisch  # pylint: disable=import-outside-toplevel
         actie = {"synthetisch": synthetisch.synthetisch, "melding": synthetisch.melding,

@@ -32,3 +32,4 @@ Een besluit wordt niet herschreven. Verandert het, dan komt er een nieuw ADR, en
 | [011](DF-ADR-011-ai-als-versneller.md) | AI als versneller; het resultaat is gewone, leesbare code | aanvaard |
 | [012](DF-ADR-012-identiteit-via-keycloak.md) | Identiteit via een eigen Keycloak | voorgesteld |
 | [013](DF-ADR-013-portaal-op-fundament-oa-beheer.md) | Een portaal op het fundament van oa-beheer | voorgesteld |
+| [014](DF-ADR-014-simulatie-en-drie-ingestiepatronen.md) | Een gesimuleerd jaar, en drie manieren waarop data binnenkomt | aanvaard |

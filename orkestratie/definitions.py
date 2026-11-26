@@ -21,24 +21,35 @@ from dagster import (
     DefaultScheduleStatus,
     Definitions,
     MaterializeResult,
+    OpExecutionContext,
     ScheduleDefinition,
     asset,
     define_asset_job,
+    job,
     multi_asset,
+    op,
 )
 from dagster_dbt import DagsterDbtTranslator, DbtCliResource, DbtProject, dbt_assets
 
+from beheer import onderhoud
 from ingestie import bronnen, pdok
 
 
 # --- Ingestie van de bronnen ---------------------------------------------------
 
+SOORT = {"database": ("postgres", "{b}.{t} in de bron-database op dfw"),
+         "api": ("api", "{t} uit de Zaken-API op dfw"),
+         "bestand": ("csv", "{t} uit de nachtelijke export in de landingsbucket")}
+
+
 def bron_specs():
-    return [
-        AssetSpec([f"bron_{b}", t], group_name="bron", kinds={"postgres"},
-                  description=f"{b}.{t} in de bron op dfw ({info['omschrijving']})")
-        for b, info in bronnen.BRONNEN.items() for t in bronnen.alle_tabellen(b)
-    ]
+    specs = []
+    for b, info in bronnen.BRONNEN.items():
+        soort, tekst = SOORT[info.get("soort", "database")]
+        specs += [AssetSpec([f"bron_{b}", t], group_name="bron", kinds={soort},
+                            description=tekst.format(b=b, t=t) + f" ({info['omschrijving']})")
+                  for t in bronnen.alle_tabellen(b)]
+    return specs
 
 
 def ingestie(bron, laag, omschrijving):
@@ -114,6 +125,20 @@ def dbt_modellen(context: AssetExecutionContext, dbt: DbtCliResource):
     yield from dbt.cli(["build"], context=context).stream()
 
 
+# --- Onderhoud ------------------------------------------------------------------------
+
+@op
+def snapshots_opruimen(context: OpExecutionContext):
+    """Snapshots ouder dan een week opruimen, in alle Iceberg-tabellen."""
+    opgeruimd = onderhoud.snapshots_opruimen(7, log=context.log.info)
+    return sum(opgeruimd.values())
+
+
+@job(description="Onderhoud van het lakehouse (DF-ADR-014)")
+def onderhoud_lakehouse():
+    snapshots_opruimen()
+
+
 # --- Jobs en schema's --------------------------------------------------------------
 
 ingestie_job = define_asset_job("ingestie", selection=AssetSelection.assets(*LADERS))
@@ -121,7 +146,7 @@ keten_job = define_asset_job("keten", selection=AssetSelection.all() - AssetSele
 
 defs = Definitions(
     assets=bron_specs() + LADERS + [adres_locatie, cbs_buurten, dbt_modellen],
-    jobs=[ingestie_job, keten_job],
+    jobs=[ingestie_job, keten_job, onderhoud_lakehouse],
     resources={"dbt": DbtCliResource(project_dir=DBT)},
     schedules=[
         # Snel: wijzigingen in de bronnen komen binnen enkele minuten in de ruwe laag.
@@ -129,6 +154,14 @@ defs = Definitions(
             name="ingestie_elke_5_minuten",
             job=ingestie_job,
             cron_schedule="*/5 * * * *",
+            execution_timezone="Europe/Amsterdam",
+            default_status=DefaultScheduleStatus.RUNNING,
+        ),
+        # 's Nachts: oude snapshots opruimen.
+        ScheduleDefinition(
+            name="onderhoud_elke_nacht",
+            job=onderhoud_lakehouse,
+            cron_schedule="37 3 * * *",
             execution_timezone="Europe/Amsterdam",
             default_status=DefaultScheduleStatus.RUNNING,
         ),

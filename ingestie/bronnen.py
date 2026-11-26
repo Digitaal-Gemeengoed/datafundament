@@ -1,7 +1,13 @@
 """Ingestie van de bronnen op dfw naar de ruwe laag in Iceberg.
 
-Elke bron is een schema in de bron-database: de BRP-testdata (vrijBRP) en de
-synthetische gemeentelijke bronnen daaromheen (bron/werkbank/synthetisch.py).
+De bronnen zijn de BRP-testdata (vrijBRP) en de synthetische gemeentelijke
+bronnen daaromheen (bron/werkbank/). Ze komen op drie manieren binnen, zoals
+bij een echte gemeente (DF-ADR-014):
+
+  database  rechtstreeks uit PostgreSQL, incrementeel (brp, bag, woz, mor, sociaal)
+  api       via de Zaken-API, een REST-API naar het voorbeeld van ZGW (zaken)
+  bestand   via een nachtelijke export in de landingsbucket (belastingen)
+
 Per bron twee lagen (DF-ADR-005):
 
   ruw_<bron>        insert-only: elke versie van een rij wordt toegevoegd
@@ -38,7 +44,8 @@ BRONNEN = {
         tabellen=["object", "waarde", "belanghebbende"],
     ),
     "belastingen": dict(
-        omschrijving="synthetische belastingaanslagen (OZB, afvalstoffenheffing)",
+        soort="bestand",
+        omschrijving="nachtelijke export van het belastingsysteem (CSV in de landingsbucket)",
         tabellen=["aanslag"],
     ),
     "mor": dict(
@@ -46,8 +53,10 @@ BRONNEN = {
         tabellen=["melding", "status"],
     ),
     "zaken": dict(
-        omschrijving="synthetisch zaaksysteem (zoals de ZGW-API's)",
-        tabellen=["zaaktype", "zaak", "status"],
+        soort="api",
+        omschrijving="Zaken-API van het zaaksysteem (naar het voorbeeld van ZGW)",
+        tabellen=["zaken", "statussen", "rollen", "zaakobjecten"],
+        vervangen={"zaaktypen": "url"},
     ),
     "sociaal": dict(
         omschrijving="synthetisch sociaal domein: Wmo, Jeugd, Participatiewet (art. 9 AVG)",
@@ -76,6 +85,13 @@ def bron_url():
 
 def source(bron, laag):
     """De bron als dlt-source, met de schrijfwijze van de laag."""
+    soort = BRONNEN[bron].get("soort", "database")
+    if soort == "api":
+        from ingestie import zaken_api  # pylint: disable=import-outside-toplevel
+        return zaken_api.source(lagen(bron)[laag])
+    if soort == "bestand":
+        from ingestie import landing  # pylint: disable=import-outside-toplevel
+        return landing.source(laag, stand=laag.endswith("_stand"))
     b = BRONNEN[bron]
     src = sql_database(bron_url(), schema=bron, table_names=alle_tabellen(bron))
     for t in b["tabellen"]:

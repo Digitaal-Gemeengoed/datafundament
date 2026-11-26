@@ -1,6 +1,7 @@
 # Het platform op dfc (DF-ADR-009): de kern van het lakehouse.
 #
-#   Garage (S3)         objectopslag, een eigen sleutel per onderdeel (DF-ADR-002)
+#   Garage (S3)         objectopslag, een eigen sleutel per onderdeel (DF-ADR-002);
+#                       de bucket 'landing' is via WireGuard bereikbaar voor dfw (DF-ADR-014)
 #   db                  PostgreSQL met PostGIS: Lakekeeper, Dagster en het datawarehouse (dwh)
 #   Lakekeeper          Iceberg REST-catalogus (DF-ADR-003)
 #   Trino               de enige voordeur voor afnemers (DF-ADR-008)
@@ -16,9 +17,11 @@ name: datafundament
 x-werk-omgeving: &werk-omgeving
   DAGSTER_PG_USER: dagster
   DAGSTER_PG_PASSWORD: ${DAGSTER_DB_WACHTWOORD:?}
-  # De bron op dfw, via WireGuard (DF-ADR-006).
+  # De bron op dfw, via WireGuard (DF-ADR-006), en de Zaken-API daar (DF-ADR-014).
   BRON_HOST: 10.67.0.2
   DLT_WACHTWOORD: ${DLT_WACHTWOORD:?}
+  ZAKEN_API_URL: http://10.67.0.2:8000
+  ZAKEN_API_GEHEIM: ${ZAKEN_API_GEHEIM:?}
   # dlt schrijft Iceberg in Garage, met de sleutel van de schrijvers.
   DESTINATION__FILESYSTEM__BUCKET_URL: s3://lakehouse/warehouse/dlt
   DESTINATION__FILESYSTEM__CREDENTIALS__AWS_ACCESS_KEY_ID: ${GARAGE_SCHRIJVER_SLEUTEL:?}
@@ -83,6 +86,10 @@ services:
       - ./garage.toml:/etc/garage.toml:ro
       - garagemeta:/var/lib/garage/meta
       - garagedata:/var/lib/garage/data
+    ports:
+      # Alleen voor dfw, via WireGuard: de leverancier zet zijn export in de bucket
+      # 'landing', met een sleutel die alleen mag schrijven (DF-ADR-014).
+      - "${WG_ADRES:-10.67.0.1}:3900:3900"
 
   lakekeeper-migratie:
     image: &lakekeeper vakamo/lakekeeper@sha256:e5a0e9d3ffecf0c09b2c0bcd2258e9adc2274bf88c1127b2ca08ea02966b5f48

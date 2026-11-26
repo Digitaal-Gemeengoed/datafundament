@@ -31,3 +31,7 @@ Echte CDC op de bronnen van een gemeente is een ander verhaal. Veel bronnen zijn
 - **Bewezen:** dlt leest de bron op dfw over WireGuard als `dlt_lezer` (de bron ziet 10.67.0.1) en laadt incrementeel op `gewijzigd_op`. Na een verhuizing komen alleen de twee gewijzigde rijen en de persoonslijst binnen.
 - **Grens van die aanpak:** verwijderde rijen ziet hij niet, en na een grote lading delen veel rijen hetzelfde tijdstip (dlt waarschuwt daarvoor; het werkt wel).
 - **Nog te doen:** logische replicatie (`pg_replication`), die ook verwijderingen ziet. De publicatie `datafundament` staat al klaar op de bron. Tot dat werkt, is incrementeel laden de terugval.
+
+## Aanvulling (26 november 2026)
+
+Naast CDC-light op PostgreSQL zijn er nu ook een API (zaken) en een nachtelijk bestand (belastingen) als ingestiepatroon; zie DF-ADR-014.

@@ -31,6 +31,10 @@ from datetime import date, datetime, timedelta, timezone
 SEED = 20261126
 PEILDATUM = date(2026, 11, 26)  # "vandaag" voor leeftijden en datums; vast voor herhaalbaarheid
 SCHEMAS = ["bag", "woz", "belastingen", "mor", "zaken", "sociaal"]
+# Wat dfc rechtstreeks uit de database mag lezen (CDC). Zaken komen via de Zaken-API
+# en belastingen via een nachtelijke export (DF-ADR-014), zoals bij echte leveranciers.
+CDC_SCHEMAS = ["bag", "woz", "mor", "sociaal"]
+INWONERS = 1500  # extra synthetische huishoudens in de BRP
 SQL_BESTAND = os.path.join(os.path.dirname(__file__), "synthetisch.sql")
 
 # Een middelpunt in RD per gemeente (ongeveer het centrum); andere gemeenten
@@ -287,11 +291,13 @@ def genereer(personen, verblijf, gemeenten, seed=SEED):
             v["eigenaar"] = ("nnp",) + rng.choice(BEDRIJVEN)
         v["gebruiker"] = ("bsn", volwassen[0]["bsn"], None) if volwassen else (
             v["eigenaar"] if v["doel"] != "woonfunctie" else None)
+        sinds = min((b["sinds"] for b in volwassen if b["sinds"]), default=None) or date(2012, 1, 1)
         for rol, wie in [("eigenaar", v["eigenaar"]), ("gebruiker", v["gebruiker"])]:
             if wie:
                 uit["woz"]["belanghebbende"].append(dict(
                     wozobjectnummer=wnr, rol=rol, bsn=wie[1] if wie[0] == "bsn" else None,
-                    nnp_id=wie[1] if wie[0] == "nnp" else None, nnp_naam=wie[2] if wie[0] == "nnp" else None))
+                    nnp_id=wie[1] if wie[0] == "nnp" else None, nnp_naam=wie[2] if wie[0] == "nnp" else None,
+                    begindatum=sinds if wie[0] == "bsn" else date(2005, 1, 1), einddatum=None))
 
     # 4. Sociaal domein, op leeftijd; daarna zaken die erbij horen.
     zaken_teller = collections.Counter()
@@ -402,7 +408,7 @@ def genereer(personen, verblijf, gemeenten, seed=SEED):
                     zaak("ZT-KWIJT", date(jaar, 3, 1) + timedelta(days=rng.randint(0, 60)),
                          date(jaar, 5, 15) + timedelta(days=rng.randint(0, 30)), wie[1], resultaat="toegekend")
                 elif jaar == 2026 and rng.random() < 0.12:
-                    status = "openstaand"
+                    status = "aanmaning verstuurd"  # in november nog niet betaald
                 uit["belastingen"]["aanslag"].append(dict(
                     aanslagnummer=f"{jaar}{nr:08d}", belastingjaar=jaar, soort=soort,
                     subject_bsn=wie[1] if wie[0] == "bsn" else None, subject_nnp_id=wie[1] if wie[0] == "nnp" else None,
@@ -446,6 +452,18 @@ def schrijf(con, uit):
     with con.cursor() as cur:
         cur.execute(open(SQL_BESTAND, encoding="utf-8").read())
         for s in SCHEMAS:
+            if s not in CDC_SCHEMAS:
+                cur.execute(sql.SQL("REVOKE ALL ON ALL TABLES IN SCHEMA {s} FROM dlt_lezer; "
+                                    "REVOKE USAGE ON SCHEMA {s} FROM dlt_lezer; "
+                                    "ALTER DEFAULT PRIVILEGES IN SCHEMA {s} REVOKE SELECT ON TABLES FROM dlt_lezer"
+                                    ).format(s=sql.Identifier(s)))
+                cur.execute("SELECT 1 FROM pg_publication_namespace pn JOIN pg_publication p ON p.oid = pn.pnpubid "
+                            "JOIN pg_namespace n ON n.oid = pn.pnnspid WHERE p.pubname = 'datafundament' "
+                            "AND n.nspname = %s", (s,))
+                if cur.fetchone():
+                    cur.execute(sql.SQL("ALTER PUBLICATION datafundament DROP TABLES IN SCHEMA {}").format(
+                        sql.Identifier(s)))
+                continue
             cur.execute(sql.SQL("GRANT USAGE ON SCHEMA {s} TO dlt_lezer; "
                                 "GRANT SELECT ON ALL TABLES IN SCHEMA {s} TO dlt_lezer; "
                                 "ALTER DEFAULT PRIVILEGES IN SCHEMA {s} GRANT SELECT ON TABLES TO dlt_lezer").format(
@@ -455,6 +473,15 @@ def schrijf(con, uit):
                         (s,))
             if not cur.fetchone():
                 cur.execute(sql.SQL("ALTER PUBLICATION datafundament ADD TABLES IN SCHEMA {}").format(sql.Identifier(s)))
+        # De Zaken-API leest met een eigen rol, alleen het schema zaken.
+        wachtwoord = os.environ.get("ZAKEN_API_DB_WACHTWOORD")
+        if wachtwoord:
+            cur.execute("SELECT 1 FROM pg_roles WHERE rolname = 'zaken_api'")
+            cur.execute(sql.SQL("{} ROLE zaken_api LOGIN PASSWORD {}").format(
+                sql.SQL("ALTER" if cur.fetchone() else "CREATE"), sql.Literal(wachtwoord)))
+            cur.execute("GRANT CONNECT ON DATABASE bron TO zaken_api; GRANT USAGE ON SCHEMA zaken TO zaken_api; "
+                        "GRANT SELECT ON ALL TABLES IN SCHEMA zaken TO zaken_api; "
+                        "ALTER DEFAULT PRIVILEGES IN SCHEMA zaken GRANT SELECT ON TABLES TO zaken_api")
         tabellen = [(s, t) for s in SCHEMAS for t in uit[s]]
         cur.execute(sql.SQL("TRUNCATE {} RESTART IDENTITY").format(
             sql.SQL(", ").join(sql.Identifier(s, t) for s, t in tabellen)))
@@ -470,12 +497,19 @@ def schrijf(con, uit):
 
 
 def synthetisch(con):
+    import inwoners  # pylint: disable=import-outside-toplevel
+    import simulatie  # pylint: disable=import-outside-toplevel
     with con.cursor() as cur:
+        n = inwoners.maak(cur, PEILDATUM, INWONERS, SEED)
+        print(f"Synthetische inwoners: {n} huishoudens")
         personen, verblijf, gemeenten = lees_brp(cur)
     if not personen:
         raise SystemExit("De BRP is leeg. Eerst: bron.sh laden")
     uit, verslag = genereer(personen, verblijf, gemeenten)
     schrijf(con, uit)
+    with con.cursor() as cur:
+        simulatie.zet_klaar(cur)
+    con.commit()
     print("Synthetische bronnen gemaakt (seed %d):" % SEED)
     for s in SCHEMAS:
         for t, rijen in sorted(uit[s].items()):
