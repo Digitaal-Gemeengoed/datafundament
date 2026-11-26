@@ -2,7 +2,8 @@
 # logische replicatie voor CDC (DF-ADR-006). Alleen bereikbaar via WireGuard,
 # en alleen voor dfc (pg_hba.conf en het poortfilter, DF-ADR-009).
 #
-# Daarnaast de Zaken-API van het (synthetische) zaaksysteem (DF-ADR-014).
+# Daarnaast de Zaken-API van het (synthetische) zaaksysteem (DF-ADR-014) en de
+# kluis: OpenBao met de sleutel voor pseudoniemen (DF-ADR-015).
 #
 # Bedienen met ./bron.sh (zie ./bron.sh help).
 
@@ -88,6 +89,26 @@ services:
     depends_on:
       db: { condition: service_healthy }
 
+  # De kluis: OpenBao met de sleutel voor de HMAC van een BSN (DF-ADR-015). Bewust
+  # op dfw, niet naast het lakehouse en de pseudoniemen op dfc. De sleutel verlaat
+  # OpenBao nooit; dfc vraagt alleen om een HMAC. Na elke herstart: ontzegelen
+  # (./bron.sh kluis-ontzegel). Eerste keer: ./bron.sh kluis-inrichten.
+  kluis:
+    image: quay.io/openbao/openbao:2.7.2
+    restart: unless-stopped
+    # "server" laadt zelf alles uit /openbao/config.
+    command: ["server"]
+    environment:
+      BAO_ADDR: http://127.0.0.1:8200
+    volumes:
+      - ./openbao/config.hcl:/openbao/config/config.hcl:ro
+      - ./openbao/beleid-hmac.hcl:/openbao/beleid/beleid-hmac.hcl:ro
+      - baodata:/openbao/file
+      - baologs:/openbao/logs
+    ports:
+      - "${WG_ADRES:-10.67.0.2}:8200:8200"
+    networks: [bron]
+
 networks:
   bron:
     # Vast subnet, zodat pg_hba.conf de werkbank kan toelaten.
@@ -98,3 +119,5 @@ networks:
 volumes:
   bronpg:
   testdata:
+  baodata:
+  baologs:

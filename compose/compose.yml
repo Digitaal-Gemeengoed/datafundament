@@ -24,8 +24,10 @@ x-werk-omgeving: &werk-omgeving
   DLT_WACHTWOORD: ${DLT_WACHTWOORD:?}
   ZAKEN_API_URL: http://10.67.0.2:8000
   ZAKEN_API_GEHEIM: ${ZAKEN_API_GEHEIM:?}
-  # De sleutelkluis (DF-ADR-015): pseudoniemen per BSN, in een eigen database.
-  KLUIS_GEHEIM: ${KLUIS_GEHEIM:?}
+  # De kluis (DF-ADR-015): de HMAC van een BSN komt van OpenBao op dfw (de sleutel
+  # verlaat die nooit); de koppelingen pseudoniem ↔ HMAC staan in een eigen database.
+  KLUIS_BAO_ADRES: http://10.67.0.2:8200
+  KLUIS_BAO_TOKEN: ${KLUIS_BAO_TOKEN_INGESTIE:?}
   KLUIS_DSN: host=db dbname=kluis user=kluis password=${KLUIS_DB_WACHTWOORD:?}
   # dlt schrijft Iceberg in Garage, met de sleutel van de schrijvers.
   DESTINATION__FILESYSTEM__BUCKET_URL: s3://lakehouse/warehouse/dlt
@@ -207,7 +209,8 @@ services:
       OIDC_ISSUER: ${PORTAAL_OIDC_ISSUER:-}
       OIDC_CLIENT_ID: df-portaal
       OIDC_CLIENT_SECRET: ${PORTAAL_OIDC_GEHEIM:-}
-      KLUIS_GEHEIM: ${KLUIS_GEHEIM}
+      KLUIS_BAO_ADRES: http://10.67.0.2:8200
+      KLUIS_BAO_TOKEN: ${KLUIS_BAO_TOKEN_PORTAAL:?}
       DAGSTER_URL: http://dagster-webserver:3000
       DAGSTER_LOCATIE: datafundament
       LAKEKEEPER_URL: http://lakekeeper:8181

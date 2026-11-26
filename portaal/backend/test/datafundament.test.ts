@@ -18,14 +18,22 @@ const sleutels = new Sleutels(GEHEIM);
 const id: Record<string, string> = {};
 const gestart: { verzoek: string; bsn_hmac: string }[] = [];
 let runStatus = "STARTED";
+let kluisVerzegeld = false;
 
 /** Een nagebootst Dagster (GraphQL) en de gezondheidseinden van de onderdelen. */
 const nepFetch: typeof fetch = async (invoer, init) => {
   const url = String(invoer);
   const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status, headers: { "content-type": "application/json" } });
   if (url.endsWith("/server_info")) return json({ dagster_version: "1.13.31" });
+  if (url.endsWith("/v1/sys/health")) return new Response("", { status: kluisVerzegeld ? 503 : 200 });
   if (url.endsWith("/health")) return url.includes("garage") ? new Response("", { status: 503 }) : new Response("ok");
   if (url.endsWith("/v1/info")) return json({ nodeVersion: { version: "484" }, starting: false });
+  if (url.endsWith("/v1/transit/hmac/kluis-bsn/sha2-256")) {
+    if (kluisVerzegeld) return new Response("", { status: 503 });
+    assert.equal(new Headers(init?.headers).get("x-vault-token"), "s.kluistoken-0123456789abcdefXYZ");
+    const invoer = Buffer.from(JSON.parse(String(init?.body)).input, "base64").toString();
+    return json({ data: { hmac: `vault:v1:${createHmac("sha256", "bao-sleutel").update(invoer).digest("base64")}` } });
+  }
   if (url.endsWith("/graphql")) {
     const { query, variables } = JSON.parse(String(init?.body));
     if (query.includes("runsOrError")) return json({ data: { runsOrError: { results: [{ runId: "r1", jobName: "ingestie", status: "SUCCESS", startTime: 1, endTime: 2 }] } } });
@@ -178,4 +186,24 @@ test("verwijderverzoek: vier ogen, uitvoering in Dagster, bewijs; het BSN wordt 
   assert.equal(klaar.bewijs.pseudoniem_vernietigd, true);
   assert.equal(klaar.bewijs.rijen_verwijderd, 12);
   await assert.rejects(eigenaar.query("UPDATE beheer.verwijderverzoeken SET status = 'aangevraagd', beoordeeld = NULL WHERE id = $1", [verzoek]), /afgerond/);
+});
+
+test("met OpenBao: de HMAC komt uit de kluis op dfw; verzegeld = geen verzoek, en het platform meldt het", async () => {
+  const config = testConfig("df_portaal_t9", { KLUIS_BAO_ADRES: "http://10.67.0.2:8200/", KLUIS_BAO_TOKEN: "s.kluistoken-0123456789abcdefXYZ" });
+  const bao = await bouwApp({ config, pool, nu: () => klok, koppelingen: new Koppelingen(config.koppelingen, nepFetch) }, routes);
+  try {
+    const eng = await sessie(id.eng);
+    const r = await vraag(bao, eng, "POST", "/api/verwijderverzoeken", { bsn: "999990019", grondslag: "onrechtmatig", reden: "Onterecht opgenomen in de bron" });
+    assert.equal(r.statusCode, 201);
+    const opgeslagen = (await pool.query("SELECT bsn_hmac FROM verwijderverzoeken WHERE id = $1", [r.json().id])).rows[0].bsn_hmac;
+    assert.deepEqual(opgeslagen, createHmac("sha256", "bao-sleutel").update("bsn:999990019").digest());
+    kluisVerzegeld = true;
+    const v = await vraag(bao, eng, "POST", "/api/verwijderverzoeken", { bsn: "999990020", grondslag: "onrechtmatig", reden: "Onterecht opgenomen in de bron" });
+    assert.equal(v.statusCode, 503);
+    const p = (await vraag(bao, eng, "GET", "/api/platform")).json();
+    assert.deepEqual(p.onderdelen.at(-1), { ...p.onderdelen.at(-1), naam: "Kluis (OpenBao)", stand: "fout", toelichting: "verzegeld: op dfw ontzegelen" });
+  } finally {
+    kluisVerzegeld = false;
+    await bao.close();
+  }
 });

@@ -124,19 +124,36 @@ Aan het eind toont het de adressen en het wachtwoord voor de websites. Opnieuw d
 
 De ingestie van de bron draait elke 5 minuten.
 
-## 8. Portaal, Keycloak en de kluis (op dfc)
+## 8. De kluis, het portaal en Keycloak
 
-DNS: `admin.datafundament.haarlem.dev` en `id.datafundament.haarlem.dev` vallen onder het wildcard-record.
+Eerst op **dfw**: de kluis (OpenBao) starten en inrichten.
+
+```
+cd /opt/datafundament/bron
+sudo ./bron.sh start               # poortfilter bijwerken, de kluis starten
+sudo ./bron.sh kluis-inrichten     # één keer
+```
+
+`kluis-inrichten` toont één keer drie dingen. Zet ze in je wachtwoordmanager, buiten de server:
+
+- de **ontzegelsleutel**: na elke herstart van dfw doe je `sudo ./bron.sh kluis-ontzegel`;
+- een **token voor de ingestie**;
+- een **token voor het portaal**.
+
+Dan op **dfc**:
 
 ```
 sudo /opt/datafundament/server/installeer-platform.sh
 ```
 
-Wat het script doet:
+Het script:
 
-- de databases voor Keycloak, het portaal en de kluis aanmaken;
-- Keycloak en het portaal starten;
-- bij de eerste keer `server/keycloak.sh` draaien, dat vraagt of je een Keycloak-gebruiker voor jezelf wilt.
+- vraagt om de twee tokens van de kluis;
+- maakt de databases voor Keycloak, het portaal en de kluis;
+- start Keycloak en het portaal;
+- draait bij de eerste keer `server/keycloak.sh`, dat vraagt of je een Keycloak-gebruiker voor jezelf wilt.
+
+DNS: `admin.datafundament.haarlem.dev` en `id.datafundament.haarlem.dev` vallen onder het wildcard-record.
 
 Daarna:
 
@@ -146,7 +163,7 @@ Daarna:
    ```
 2. Inloggen op `https://admin.datafundament.haarlem.dev/emergency`.
 3. Maak een groep met superadmin en een account met het e-mailadres van je Keycloak-gebruiker.
-4. Daarna log je gewoon in via Keycloak. De eerste keer stel je je eigen wachtwoord en een authenticator-app in.
+4. Daarna log je in via Keycloak.
 
 **Eén keer bij de overstap naar pseudoniemen (DF-ADR-015).** De ruwe lagen van daarvoor bevatten BSN's en namen. Leeg ze; de ingestie laadt daarna alles opnieuw, gepseudonimiseerd:
 

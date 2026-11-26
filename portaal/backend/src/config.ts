@@ -40,12 +40,16 @@ export interface Config {
    * De onderdelen van het platform, binnen het compose-netwerk. Het portaal
    * leest er de stand uit en start jobs in Dagster (verwijderverzoeken).
    */
-  koppelingen: { dagster: string; dagsterLocatie: string; lakekeeper: string; trino: string; garage: string };
-  /**
-   * De sleutel van de kluis (KLUIS_GEHEIM), dezelfde als bij de ingestie. Het
-   * portaal maakt er alleen de HMAC van een BSN mee; het BSN zelf bewaart het
-   * nooit (DF-ADR-015). Zonder deze sleutel staan verwijderverzoeken uit.
-   */
+  koppelingen: {
+    dagster: string; dagsterLocatie: string; lakekeeper: string; trino: string; garage: string;
+    /**
+     * De kluis: OpenBao op dfw, dat de HMAC van een BSN berekent met de sleutel
+     * kluis-bsn, dezelfde als bij de ingestie. Het portaal ziet de sleutel nooit en
+     * bewaart het BSN nooit (DF-ADR-015).
+     */
+    kluis: { adres: string; token: string } | null;
+  };
+  /** Alleen voor tests en lokaal: een HMAC-sleutel in het proces in plaats van OpenBao. */
   kluisGeheim: string | null;
   /** Statische bestanden van de frontend. */
   frontendMap: string;
@@ -85,6 +89,9 @@ export function leesConfig(env: NodeJS.ProcessEnv = process.env): Config {
       lakekeeper: (env.LAKEKEEPER_URL ?? "http://lakekeeper:8181").replace(/\/$/, ""),
       trino: (env.TRINO_URL ?? "http://trino:8080").replace(/\/$/, ""),
       garage: (env.GARAGE_URL ?? "http://garage:3903").replace(/\/$/, ""),
+      kluis: env.KLUIS_BAO_ADRES
+        ? { adres: env.KLUIS_BAO_ADRES.replace(/\/$/, ""), token: geheim(env, "KLUIS_BAO_TOKEN", 20) }
+        : null,
     },
     kluisGeheim: env.KLUIS_GEHEIM ? geheim(env, "KLUIS_GEHEIM", 32) : null,
     frontendMap: env.FRONTEND_MAP ?? new URL("../../frontend/dist", import.meta.url).pathname,

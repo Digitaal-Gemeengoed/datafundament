@@ -36,7 +36,7 @@ Twee dingen maken echt verwijderen in deze stack lastig:
 
 - Een eigen database `kluis` op dfc, met een eigen rol, niet via Trino te lezen.
 - Daarin `kluis.koppeling (bsn_hmac, pseudoniem, vernietigd, verzoek)` en `kluis.blokkade (bron, sleutel)`.
-- Het BSN staat ook hier niet in, alleen als HMAC-SHA256 met `KLUIS_GEHEIM`. Die sleutel delen de ingestie en het portaal.
+- Het BSN staat ook hier niet in, alleen als HMAC-SHA256. De sleutel daarvoor staat in OpenBao op dfw (zie de aanvulling hieronder).
 
 **3. Verwijderen via het portaal, met vier ogen** (DF-ADR-013):
 
@@ -73,3 +73,34 @@ Twee dingen maken echt verwijderen in deze stack lastig:
 - **Een HMAC als pseudoniem:** geen kluis nodig. Maar wie de sleutel heeft, kan het pseudoniem uit elk BSN opnieuw berekenen. Dan is er niets te shredden.
 - **Alleen fysiek verwijderen:** sterkst, maar dat kan pas met een schrijvende engine voor compaction. Dat blijft de vervolgstap.
 - **De kluis in OpenBao:** sterker beheer van de sleutel, maar een extra dienst die na elke herstart ontzegeld moet worden. Voor de PoC volstaat PostgreSQL met een eigen rol.
+
+## Aanvulling (26 november 2026): de sleutel in OpenBao op dfw
+
+Een BSN heeft maar zo'n honderd miljoen geldige waarden. Wie de HMAC-sleutel heeft, rekent ze binnen een uur allemaal uit en herleidt zo elk pseudoniem. Een sleutel in `compose/.env` op dfc, naast het lakehouse en de kluisdatabase, beschermt dus weinig tegen wie dfc binnendringt.
+
+**Besluit** (Erik Hoekstra, op voorstel van Claude):
+
+- **OpenBao 2.7.2 op dfw**, in de compose van de bron. Alleen bereikbaar via WireGuard, en het poortfilter laat alleen dfc toe op poort 8200. Dezelfde versie en dezelfde opzet als bij de Office Assistent (OA-ADR-008).
+- **Transit-sleutel `kluis-bsn`.** De ingestie en het portaal vragen alleen om een HMAC (`transit/hmac/kluis-bsn/sha2-256`). De sleutel verlaat OpenBao nooit: lezen, exporteren, roteren of verwijderen mag geen van beide. Elk heeft een eigen periodiek token (768 uur, dat ze zelf verlengen), zodat het auditlog laat zien wie vroeg.
+- **Auditlog** in OpenBao, vastgelegd in de configuratie (OpenBao 2 staat dat niet via de API toe). De invoer staat er gehasht in, niet als BSN. Dat is lokaal gecontroleerd.
+- **Ontzegelen met de hand**, met één ontzegelsleutel (een PoC; in productie 3 van 5, en automatisch ontzegelen met een HSM of KMS). Na een herstart van dfw zijn de ingestie en de verwijderverzoeken verzegeld tot iemand `bron.sh kluis-ontzegel` doet. Het portaal toont dan "Kluis (OpenBao): verzegeld" op de pagina Platform.
+- **Het root-token** wordt na het inrichten ingetrokken.
+- `KLUIS_GEHEIM` bestaat alleen nog voor tests en lokaal werk.
+
+**Gevolgen:**
+
+- Wie dfc binnendringt, heeft het lakehouse, de pseudoniemen en de HMAC's, maar niet de sleutel. Wie dfw binnendringt, heeft de sleutel en de BRP, maar niet de koppelingen. Pas met beide valt een pseudoniem te herleiden.
+- Een herstart van dfw vraagt nu een handeling. Dat is de prijs van een sleutel die niet op schijf staat.
+- Een nieuwe sleutel (rotatie) geeft andere HMAC's, en dus nieuwe koppelingen. Roteren betekent opnieuw laden. Daarom mag het token niet roteren.
+- **Lokaal getest met een echte OpenBao 2.7.2:**
+  - inrichten zoals `bron.sh` dat doet;
+  - het beleid (lezen en exporteren van de sleutel geweigerd);
+  - het auditlog zonder BSN;
+  - verzegeld na een herstart, met de juiste melding;
+  - na ontzegelen dezelfde HMAC;
+  - ingestie en portaal geven dezelfde HMAC voor hetzelfde BSN.
+
+**Niet in OpenBao:**
+
+- De TLS-certificaten. Die blijven bij Caddy: het zijn publieke certificaten die zichzelf vernieuwen.
+- De overige geheimen in `.env`. Die gaan pas naar OpenBao als er een agent of opstartwrapper per container is. Dat is een vervolgstap.

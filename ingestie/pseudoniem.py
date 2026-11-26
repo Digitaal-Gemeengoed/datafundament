@@ -19,10 +19,17 @@ een volgende ingestie geen nieuw pseudoniem: persoonsgebonden rijen worden
 overgeslagen, andere rijen krijgen een leeg pseudoniem. De BRP-rijen van de
 persoon (via pl_id) staan op de blokkadelijst.
 
-Configuratie: KLUIS_GEHEIM (HMAC-sleutel, dezelfde als in het portaal) en
-KLUIS_DSN (de database). Zonder KLUIS_DSN, alleen voor tests: een kluis in het
-geheugen.
+De HMAC komt van OpenBao op dfw (transit, sleutel kluis-bsn): de sleutel
+verlaat OpenBao nooit, en elke vraag staat in het auditlog daar. De database
+met de koppelingen staat op dfc. Wie dfc binnendringt, heeft dus pseudoniemen
+en HMAC's, maar niet de sleutel om een BSN te herleiden.
+
+Configuratie: KLUIS_BAO_ADRES en KLUIS_BAO_TOKEN (OpenBao), KLUIS_DSN (de
+database). Alleen voor tests en lokaal: KLUIS_GEHEIM (een HMAC-sleutel in het
+proces) in plaats van OpenBao, en zonder KLUIS_DSN een kluis in het geheugen.
 """
+
+import base64
 
 import hashlib
 import hmac
@@ -71,13 +78,44 @@ REGELS = {
 
 
 def hmac_bsn(bsn, geheim):
-    """Dezelfde HMAC als in het portaal (portaal/backend/src/kluis.ts)."""
+    """HMAC in het proces; alleen voor tests en lokaal (portaal/backend/src/kluis.ts doet hetzelfde)."""
     return hmac.new(geheim.encode(), f"bsn:{bsn}".encode(), hashlib.sha256).digest()
 
 
+class KluisVerzegeld(RuntimeError):
+    pass
+
+
+class OpenBao:
+    """De HMAC van een BSN, berekend door OpenBao (transit/hmac/kluis-bsn)."""
+
+    def __init__(self, adres, token):
+        import requests  # pylint: disable=import-outside-toplevel
+        self.adres, self.s = adres.rstrip("/"), requests.Session()
+        self.s.headers["X-Vault-Token"] = token
+        # Het token is periodiek: elke keer verlengen houdt het in leven.
+        try:
+            self.s.post(f"{self.adres}/v1/auth/token/renew-self", timeout=5)
+        except Exception:  # pylint: disable=broad-except
+            pass
+
+    def hmac(self, tekst):
+        r = self.s.post(f"{self.adres}/v1/transit/hmac/kluis-bsn/sha2-256",
+                        json={"input": base64.b64encode(tekst.encode()).decode()}, timeout=10)
+        if r.status_code == 503:
+            raise KluisVerzegeld("De kluis (OpenBao op dfw) is verzegeld. Op dfw: sudo ./bron.sh kluis-ontzegel")
+        r.raise_for_status()
+        return base64.b64decode(r.json()["data"]["hmac"].split(":", 2)[2])
+
+
 class Kluis:
-    def __init__(self, dsn=None, geheim=None):
-        self.geheim = geheim or os.environ["KLUIS_GEHEIM"]
+    def __init__(self, dsn=None, geheim=None, bao=None):
+        self.bao = bao
+        if self.bao is None and os.environ.get("KLUIS_BAO_ADRES"):
+            self.bao = OpenBao(os.environ["KLUIS_BAO_ADRES"], os.environ["KLUIS_BAO_TOKEN"])
+        self.geheim = geheim or os.environ.get("KLUIS_GEHEIM")
+        if not self.bao and not self.geheim:
+            raise RuntimeError("Geen kluis: zet KLUIS_BAO_ADRES en KLUIS_BAO_TOKEN (of, alleen lokaal, KLUIS_GEHEIM)")
         self.dsn = dsn if dsn is not None else os.environ.get("KLUIS_DSN")
         self.cache = {}
         self.geheugen = {} if not self.dsn else None
@@ -96,7 +134,7 @@ class Kluis:
         bsn = str(bsn).strip().zfill(9)
         if bsn in self.cache:
             return self.cache[bsn]
-        h = hmac_bsn(bsn, self.geheim)
+        h = self.hmac(bsn)
         if self.geheugen is not None:
             p = self.geheugen.setdefault(h, str(uuid.uuid4()))
         else:
@@ -109,6 +147,9 @@ class Kluis:
             p = str(p) if p else None
         self.cache[bsn] = p
         return p
+
+    def hmac(self, bsn):
+        return self.bao.hmac(f"bsn:{bsn}") if self.bao else hmac_bsn(bsn, self.geheim)
 
     def blokkades(self, bron):
         if self.geheugen is not None:

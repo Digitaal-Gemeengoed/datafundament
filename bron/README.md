@@ -89,6 +89,15 @@ Uniformeren (datums, codes, namen) gebeurt bewust niet hier, maar in het lakehou
 
 Het schema in `sql/02-schema.sql` is gemaakt met `python werkbank/brp.py schema`; wijzig het niet met de hand.
 
+## De kluis (OpenBao)
+
+Op dfw draait ook OpenBao, met de sleutel waarmee dfc de HMAC van een BSN laat berekenen (DF-ADR-015). De sleutel verlaat OpenBao nooit. dfc heeft alleen tokens die om een HMAC mogen vragen. De koppelingen pseudoniem ↔ HMAC staan op dfc. Zo heeft geen van beide servers alles.
+
+- Eén keer inrichten: `sudo ./bron.sh kluis-inrichten`. Dat toont de ontzegelsleutel en twee tokens (ingestie en portaal), één keer.
+- Na elke herstart: `sudo ./bron.sh kluis-ontzegel`. Tot dan wachten de ingestie en de verwijderverzoeken; het portaal toont "verzegeld".
+- `sudo ./bron.sh kluis-status` zegt of de kluis ingericht en ontzegeld is.
+- Het auditlog van elke vraag staat in het volume `baologs`, zonder BSN's.
+
 ## Bedienen (op dfw)
 
 ```
@@ -130,5 +139,6 @@ Elke mutatie is één transactie, zoals een BRP-systeem die zou doen.
 - `dlt_lezer`: lezen en replicatie, alleen vanaf dfc (10.67.0.1). Het wachtwoord: `sudo ./bron.sh dlt-wachtwoord`.
 - `zaken_api`: alleen lezen in het schema `zaken`, alleen vanuit het compose-netwerk (de Zaken-API).
 - De Zaken-API (poort 8000) is alleen bereikbaar voor dfc (10.67.0.1), met een JWT.
+- De kluis (OpenBao, poort 8200) is alleen bereikbaar voor dfc, met een token dat alleen een HMAC mag laten berekenen.
 - Publicatie `datafundament`: alle tabellen in `brp`, `bag`, `woz`, `mor` en `sociaal`, ook tabellen die later bijkomen. Niet `zaken` en `belastingen`: die komen via de API en de export.
 - Een replicatieslot dat niemand leest, houdt hoogstens 2 GB WAL vast (`max_slot_wal_keep_size`).

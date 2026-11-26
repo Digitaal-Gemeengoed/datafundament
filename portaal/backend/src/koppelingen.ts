@@ -54,11 +54,15 @@ export class Koppelingen {
       }],
       ["Garage", `${this.c.garage}/health`, async () => "opslag antwoordt"],
     ];
+    if (this.c.kluis) proeven.push(["Kluis (OpenBao)", `${this.c.kluis.adres}/v1/sys/health`, async () => "ontzegeld"]);
     return Promise.all(proeven.map(async ([naam, url, uitleg]) => {
       const begin = Date.now();
       try {
         const r = await this.haal(url);
-        if (!r.ok) return { naam, stand: "fout" as const, toelichting: `HTTP ${r.status}`, ms: Date.now() - begin };
+        if (!r.ok) {
+          const uitleg = naam.startsWith("Kluis") ? { 503: "verzegeld: op dfw ontzegelen", 501: "nog niet ingericht" }[r.status] : undefined;
+          return { naam, stand: "fout" as const, toelichting: uitleg ?? `HTTP ${r.status}`, ms: Date.now() - begin };
+        }
         return { naam, stand: "ok" as const, toelichting: await uitleg(r), ms: Date.now() - begin };
       } catch (e) {
         return { naam, stand: "fout" as const, toelichting: (e as Error).name === "TimeoutError" ? "geen antwoord" : "niet bereikbaar", ms: Date.now() - begin };
@@ -120,6 +124,40 @@ export class Koppelingen {
       laatsteRun: a.assetMaterializations[0]?.runId ?? null,
       bovenstrooms: a.dependencyKeys.map((k) => k.path.join("/")),
     })).sort((x, y) => x.sleutel.localeCompare(y.sleutel));
+  }
+
+  /** De HMAC van een BSN, door OpenBao (transit/hmac/kluis-bsn); dezelfde als bij de ingestie. */
+  async kluisHmac(bsn: string): Promise<Buffer> {
+    const k = this.c.kluis;
+    if (!k) throw new AppFout(503, "geen-kluis", "De kluis is niet ingesteld.");
+    let r: Response;
+    try {
+      r = await this.haal(`${k.adres}/v1/transit/hmac/kluis-bsn/sha2-256`, {
+        method: "POST",
+        headers: { "x-vault-token": k.token, "content-type": "application/json" },
+        body: JSON.stringify({ input: Buffer.from(`bsn:${bsn}`).toString("base64") }),
+      }, 8000);
+    } catch {
+      throw new AppFout(502, "kluis-onbereikbaar", "De kluis antwoordt niet.");
+    }
+    if (r.status === 503) throw new AppFout(503, "kluis-verzegeld", "De kluis is verzegeld; vraag de beheerder om te ontzegelen.");
+    if (!r.ok) throw new AppFout(502, "kluis-fout", "De kluis gaf een fout.");
+    const j = (await r.json()) as { data?: { hmac?: string } };
+    const waarde = j.data?.hmac?.split(":")[2];
+    if (!waarde) throw new AppFout(502, "kluis-fout", "De kluis gaf geen HMAC.");
+    return Buffer.from(waarde, "base64");
+  }
+
+  /** Het token van de kluis is periodiek: regelmatig verlengen houdt het in leven. */
+  async verlengKluisToken(): Promise<boolean> {
+    const k = this.c.kluis;
+    if (!k) return false;
+    try {
+      const r = await this.haal(`${k.adres}/v1/auth/token/renew-self`, { method: "POST", headers: { "x-vault-token": k.token } });
+      return r.ok;
+    } catch {
+      return false;
+    }
   }
 
   /** Start de job die een verwijderverzoek uitvoert. Geeft het run-id. */

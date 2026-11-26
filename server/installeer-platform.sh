@@ -30,8 +30,6 @@ for n in DB_WACHTWOORD LK_DB_WACHTWOORD DAGSTER_DB_WACHTWOORD DWH_SCHRIJVER_WACH
 done
 vul_aan LK_SLEUTEL "$(geheim 32)"
 vul_aan PORTAAL_ADMIN_GEHEIM "$(geheim 32)"
-# De sleutel van de kluis (DF-ADR-015): HMAC van het BSN, gedeeld door ingestie en portaal.
-vul_aan KLUIS_GEHEIM "$(geheim 32)"
 vul_aan GARAGE_RPC_GEHEIM "$(geheim 32)"
 for k in BEHEER LAKEKEEPER SCHRIJVER LEZER LANDING; do
   vul_aan "GARAGE_${k}_SLEUTEL" "GK$(geheim 12)"
@@ -53,6 +51,17 @@ if ! grep -q '^ZAKEN_API_GEHEIM=' "$ENV"; then
   done
   vul_aan ZAKEN_API_GEHEIM "$W"
 fi
+# De kluis (DF-ADR-015): tokens voor OpenBao op dfw, alleen om een HMAC te laten berekenen.
+for wie in INGESTIE PORTAAL; do
+  if ! grep -q "^KLUIS_BAO_TOKEN_$wie=" "$ENV"; then
+    while :; do
+      read -r -s -p "  Token van de kluis voor ${wie,,} (op dfw: sudo ./bron.sh kluis-inrichten): " W; echo
+      [[ "$W" =~ ^[A-Za-z0-9._-]{20,}$ ]] && break
+      waarschuw "Dat lijkt niet op een token van OpenBao."
+    done
+    vul_aan "KLUIS_BAO_TOKEN_$wie" "$W"
+  fi
+done
 vul_aan WEB_GEBRUIKER datafundament
 if ! grep -q '^WEB_WACHTWOORD=' "$ENV"; then
   WW="$(geheim 12)"
@@ -68,6 +77,12 @@ if [ -x /usr/local/sbin/df-docker-filter ] && ! cmp -s "$DF_REPO/server/docker-f
   install -m 755 "$DF_REPO/server/docker-filter.sh" /usr/local/sbin/df-docker-filter
   systemctl restart df-docker-filter
   ok "Poortfilter bijgewerkt"
+fi
+
+if curl -s -o /dev/null -w '%{http_code}' --max-time 3 http://10.67.0.2:8200/v1/sys/health | grep -q 200; then
+  ok "De kluis (OpenBao op dfw) is bereikbaar en ontzegeld"
+else
+  waarschuw "De kluis op dfw is niet bereikbaar of verzegeld; de ingestie en verwijderverzoeken wachten daarop (op dfw: sudo ./bron.sh kluis-status)."
 fi
 
 if ping -c 1 -W 2 10.67.0.2 >/dev/null 2>&1; then

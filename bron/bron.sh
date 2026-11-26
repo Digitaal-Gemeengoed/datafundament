@@ -16,6 +16,9 @@
 #   sudo ./bron.sh export-belastingen de export van de belastingen nu maken
 #   sudo ./bron.sh landing-sleutel    de sleutel voor de landingsbucket invoeren (komt van dfc)
 #   sudo ./bron.sh zaken-api-geheim   het geheim van de Zaken-API, voor dfc
+#   sudo ./bron.sh kluis-inrichten    OpenBao de eerste keer inrichten (toont ontzegelsleutel en tokens)
+#   sudo ./bron.sh kluis-ontzegel     OpenBao ontzegelen, na elke herstart
+#   sudo ./bron.sh kluis-status       is de kluis ingericht en ontzegeld?
 #   sudo ./bron.sh dlt-wachtwoord     het wachtwoord van dlt_lezer, voor dfc
 #   sudo ./bron.sh status             aantallen, laatste wijzigingen, replicatie
 #   sudo ./bron.sh psql               SQL-prompt in de bron
@@ -68,7 +71,70 @@ start() {
   else
     ok "De Zaken-API start na: sudo ./bron.sh synthetisch"
   fi
+  docker compose up -d kluis >/dev/null
+  case "$(kluis_stand)" in
+    ok) ok "De kluis (OpenBao) is ontzegeld" ;;
+    verzegeld) printf '  \033[33m!\033[0m De kluis is verzegeld. Ontzegel: sudo ./bron.sh kluis-ontzegel\n' ;;
+    *) printf '  \033[33m!\033[0m De kluis is nog niet ingericht: sudo ./bron.sh kluis-inrichten\n' ;;
+  esac
   ok "De bron draait op $(waarde WG_ADRES):5432"
+}
+
+bao() { docker compose exec -T kluis bao "$@"; }
+
+kluis_stand() {  # ok | verzegeld | nieuw
+  local s
+  # bao status geeft 2 als de kluis verzegeld is; de JSON telt.
+  for _ in $(seq 1 20); do
+    s="$(bao status -format=json 2>/dev/null | tr -d ' \n' || true)"
+    [ -n "$s" ] && break
+    sleep 1
+  done
+  case "$s" in
+    *'"initialized":false'*) echo nieuw ;;
+    *'"sealed":true'*) echo verzegeld ;;
+    *'"sealed":false'*) echo ok ;;
+    *) echo nieuw ;;
+  esac
+}
+
+kluis_inrichten() {
+  docker compose up -d kluis >/dev/null
+  [ "$(kluis_stand)" = nieuw ] || stop "De kluis is al ingericht. Ontzegelen: sudo ./bron.sh kluis-ontzegel"
+  # Eén ontzegelsleutel: een PoC. In productie 3 van 5, en automatisch ontzegelen met een HSM of KMS.
+  local uit ontzegel root
+  uit="$(bao operator init -key-shares=1 -key-threshold=1 -format=json | tr -d '\n')"
+  ontzegel="$(echo "$uit" | sed -n 's/.*"unseal_keys_b64": *\[ *"\([^"]*\)".*/\1/p')"
+  root="$(echo "$uit" | sed -n 's/.*"root_token": *"\([^"]*\)".*/\1/p')"
+  [ -n "$ontzegel" ] && [ -n "$root" ] || stop "Initialiseren mislukt."
+  bao operator unseal "$ontzegel" >/dev/null
+  baor() { docker compose exec -T -e BAO_TOKEN="$root" kluis bao "$@"; }
+  baor secrets enable transit >/dev/null
+  # De sleutel voor de HMAC: niet te exporteren, niet te verwijderen.
+  baor write -f transit/keys/kluis-bsn type=aes256-gcm96 >/dev/null
+  baor policy write kluis-hmac /openbao/beleid/beleid-hmac.hcl >/dev/null
+  token() { baor token create -policy=kluis-hmac -period=768h -orphan -display-name="$1" -format=json \
+              | tr -d '\n' | sed -n 's/.*"client_token": *"\([^"]*\)".*/\1/p'; }
+  local ingestie portaal
+  ingestie="$(token df-ingestie)"; portaal="$(token df-portaal)"
+  [ -n "$ingestie" ] && [ -n "$portaal" ] || stop "Tokens maken mislukt."
+  baor token revoke -self >/dev/null
+  cat <<UIT
+
+  De kluis is ingericht. Bewaar dit nu in je wachtwoordmanager, buiten deze server;
+  het wordt nergens bewaard.
+
+    Ontzegelsleutel:    $ontzegel
+        (na elke herstart van dfw of van de kluis: sudo ./bron.sh kluis-ontzegel)
+
+  Voor dfc (installeer-platform.sh vraagt erom):
+    Token ingestie:     $ingestie
+    Token portaal:      $portaal
+
+  Het root-token is ingetrokken. Een nieuw maken kan met de ontzegelsleutel
+  (bao operator generate-root).
+
+UIT
 }
 
 werkbank() {
@@ -151,6 +217,14 @@ case "${1:-help}" in
     printf 'LANDING_SLEUTEL=%s\nLANDING_GEHEIM=%s\n' "$ID" "$GEHEIM" >> .env
     ok "Opgeslagen in $HIER/.env" ;;
   zaken-api-geheim) maak_env; waarde ZAKEN_API_GEHEIM ;;
+  kluis-inrichten) maak_env; kluis_inrichten ;;
+  kluis-ontzegel)
+    docker compose up -d kluis >/dev/null
+    [ "$(kluis_stand)" = verzegeld ] || { ok "De kluis is niet verzegeld ($(kluis_stand))"; exit 0; }
+    read -r -s -p "  Ontzegelsleutel: " K; echo
+    bao operator unseal "$K" >/dev/null || stop "Ontzegelen mislukt."
+    ok "De kluis is ontzegeld" ;;
+  kluis-status) echo "  kluis: $(kluis_stand)" ;;
   dlt-wachtwoord) waarde DLT_WACHTWOORD ;;
   psql) docker compose exec db psql -U bron bron ;;
   opnieuw)
@@ -161,5 +235,5 @@ case "${1:-help}" in
     werkbank laden
     werkbank synthetisch
     docker compose up -d zaken-api ;;
-  *) sed -n '2,22p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

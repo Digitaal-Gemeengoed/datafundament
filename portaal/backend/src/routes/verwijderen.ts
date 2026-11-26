@@ -15,9 +15,14 @@ const KLAAR: Record<string, "uitgevoerd" | "mislukt"> = { SUCCESS: "uitgevoerd",
 export async function verwijderRoutes(app: FastifyInstance): Promise<void> {
   const d = app.diensten;
 
-  function kluis(): string {
-    if (!d.config.kluisGeheim) throw new AppFout(503, "geen-kluis", "Verwijderverzoeken staan uit: KLUIS_GEHEIM ontbreekt.");
-    return d.config.kluisGeheim;
+  const kluisAan = () => d.config.koppelingen.kluis !== null || d.config.kluisGeheim !== null;
+  function kluis(): void {
+    if (!kluisAan()) throw new AppFout(503, "geen-kluis", "Verwijderverzoeken staan uit: de kluis is niet ingesteld.");
+  }
+  /** OpenBao op dfw; alleen in tests en lokaal een sleutel in het proces. */
+  async function hmacVan(bsn: string): Promise<Buffer> {
+    kluis();
+    return d.config.koppelingen.kluis ? d.koppelingen.kluisHmac(bsn) : bsnHmac(bsn, d.config.kluisGeheim!);
   }
 
   /** Lopende uitvoeringen bijwerken met de stand in Dagster. */
@@ -44,7 +49,7 @@ export async function verwijderRoutes(app: FastifyInstance): Promise<void> {
         ORDER BY (v.status IN ('aangevraagd', 'in-uitvoering', 'mislukt')) DESC, v.aangemaakt DESC LIMIT 500`,
     );
     return {
-      aan: d.config.kluisGeheim !== null,
+      aan: kluisAan(),
       verzoeken: r.rows.map((v) => ({ ...v, bsn: `******${v.bsn_einde}`, mag_beoordelen: p.rechten.has("verwijderen.beoordelen") && v.aanvrager_id !== p.id })),
     };
   });
@@ -67,7 +72,7 @@ export async function verwijderRoutes(app: FastifyInstance): Promise<void> {
       vereis(req, "verwijderen.aanvragen");
       const p = req.persoon!;
       if (!geldigBsn(req.body.bsn)) throw new AppFout(400, "ongeldig-bsn", "Dit BSN voldoet niet aan de elfproef.");
-      const hmac = bsnHmac(req.body.bsn, kluis());
+      const hmac = await hmacVan(req.body.bsn);
       const dubbel = await d.pool.query("SELECT 1 FROM verwijderverzoeken WHERE bsn_hmac = $1 AND status IN ('aangevraagd', 'in-uitvoering')", [hmac]);
       if (dubbel.rowCount) throw new AppFout(409, "loopt-al", "Voor dit BSN loopt al een verzoek.");
       const r = await d.pool.query(

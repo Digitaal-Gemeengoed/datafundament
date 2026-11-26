@@ -26,5 +26,10 @@ const taken = async () => {
 };
 setInterval(taken, 30_000).unref();
 
+// Het token van de kluis is periodiek (768 uur): bij het starten en elke dag verlengen.
+const verleng = () => d.koppelingen.verlengKluisToken().then((ok) => { if (config.koppelingen.kluis && !ok) app.log.warn("token van de kluis verlengen lukte niet"); });
+verleng();
+setInterval(verleng, 24 * 3600_000).unref();
+
 await app.listen({ host: "0.0.0.0", port: config.poort });
 for (const s of ["SIGTERM", "SIGINT"]) process.on(s, () => app.close().then(() => pool.end()).finally(() => process.exit(0)));
