@@ -36,3 +36,4 @@ Een besluit wordt niet herschreven. Verandert het, dan komt er een nieuw ADR, en
 | [015](DF-ADR-015-pseudonimisering-en-verwijderen.md) | Pseudoniemen bij de poort, een sleutelkluis, en verwijderen met crypto-shredding | aanvaard |
 | [016](DF-ADR-016-elke-datavraag-vastleggen.md) | Elke datavraag vastleggen, door Trino zelf | aanvaard |
 | [017](DF-ADR-017-trino-via-keycloak-met-kolomrechten.md) | Trino via Keycloak, met rechten per kolom uit het portaal | aanvaard |
+| [018](DF-ADR-018-poort-voor-dagster-en-catalogus.md) | Een poort via Keycloak voor Dagster en de catalogus | aanvaard |

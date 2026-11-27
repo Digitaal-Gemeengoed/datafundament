@@ -1,30 +1,51 @@
 # Caddy op dfc: TLS (Let's Encrypt) en de enige ingang (DF-ADR-009).
-# De onderdelen vragen nog hetzelfde wachtwoord; het portaal logt in via Keycloak (DF-ADR-012).
+# Alles logt in via Keycloak (DF-ADR-012): het portaal, Trino en OpenMetadata zelf,
+# Dagster en de catalogus via de poort (DF-ADR-018).
 # Namen: {$DOMEIN} en *.{$DOMEIN} wijzen naar dfc.
 
-(afgeschermd) {
-	basic_auth {
-		{$WEB_GEBRUIKER} {$WEB_WACHTWOORD_HASH}
-	}
+# De poort (DF-ADR-018): wie hier binnenkomt, is via Keycloak ingelogd (met tweede
+# factor) en heeft in het portaal het recht platform.bedienen. oauth2-proxy beslist;
+# niet ingelogd gaat naar Keycloak, ingelogd zonder recht krijgt 403.
+# Gebruik: import poort <onderdeel:poort>
+(poort) {
 	header {
 		X-Robots-Tag "noindex, nofollow"
 		Referrer-Policy no-referrer
 		X-Content-Type-Options nosniff
+		Strict-Transport-Security "max-age=31536000"
 		-Server
+	}
+	handle /oauth2/* {
+		reverse_proxy poort:4180 {
+			header_up X-Real-IP {remote_host}
+			header_up X-Forwarded-Uri {uri}
+		}
+	}
+	handle {
+		forward_auth poort:4180 {
+			uri /oauth2/auth
+			header_up X-Real-IP {remote_host}
+			copy_headers X-Auth-Request-Email
+			@uit status 401
+			handle_response @uit {
+				redir * /oauth2/start?rd={scheme}://{host}{uri}
+			}
+		}
+		reverse_proxy {args[0]}
 	}
 }
 
-# Startpagina, met links naar de onderdelen.
+# Startpagina: alleen links naar de onderdelen, zonder inlog.
 {$DOMEIN} {
-	import afgeschermd
+	header X-Robots-Tag "noindex, nofollow"
+	header -Server
 	root * /srv/start
 	file_server
 }
 
 # Dagster: de keten, runs, lineage.
 dagster.{$DOMEIN} {
-	import afgeschermd
-	reverse_proxy dagster-webserver:3000
+	import poort dagster-webserver:3000
 }
 
 # Trino: de voordeur voor afnemers (JDBC, CLI, web-UI). Trino logt zelf in via
@@ -37,10 +58,7 @@ trino.{$DOMEIN} {
 
 # Lakekeeper: de Iceberg-catalogus, met web-UI op /ui.
 catalogus.{$DOMEIN} {
-	import afgeschermd
-	reverse_proxy lakekeeper:8181 {
-		header_up -Authorization
-	}
+	import poort lakekeeper:8181
 }
 
 # Het portaal: eigen inlog via Keycloak (met tweede factor) en een noodaccount.

@@ -12,6 +12,9 @@
 #   - realm 'datafundament', met brute-force-detectie;
 #   - een vertrouwelijke client 'df-portaal' (authorization code + PKCE);
 #   - een vertrouwelijke client 'df-metadata' voor OpenMetadata (DF-ADR-007);
+#   - een vertrouwelijke client 'df-poort' voor de poort voor Dagster en de catalogus
+#     (oauth2-proxy, DF-ADR-018);
+#   - herstelcodes naast de authenticator-app (zoals bij de Office Assistent);
 #   - een vertrouwelijke client 'df-trino' voor Trino, met df-trino als audience
 #     in het access token (DF-ADR-017);
 #   - de AMR-mapper, zodat het id_token meldt dat er een tweede factor was;
@@ -157,6 +160,79 @@ else
   ok "Client df-metadata bestaat al; adressen gezet op $METADATA"
 fi
 
+# --- Client voor de poort (oauth2-proxy voor Dagster en de catalogus) -----------------------
+POORT_URIS="[\"https://dagster.$DOMEIN/oauth2/callback\",\"https://catalogus.$DOMEIN/oauth2/callback\"]"
+PID="$(kc get clients -r $R -q clientId=df-poort --fields id 2>/dev/null | jq -r '.[0].id // empty')"
+if [ -z "$PID" ]; then
+  kc create clients -r $R \
+    -s clientId=df-poort -s name="Poort (Dagster, catalogus)" -s enabled=true \
+    -s protocol=openid-connect -s publicClient=false -s clientAuthenticatorType=client-secret \
+    -s secret="$(geheim 32)" \
+    -s standardFlowEnabled=true -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
+    -s "redirectUris=$POORT_URIS" -s 'attributes."pkce.code.challenge.method"=S256' >/dev/null
+  PID="$(kc get clients -r $R -q clientId=df-poort --fields id | jq -r '.[0].id')"
+  ok "Client df-poort aangemaakt"
+else
+  kc update "clients/$PID" -r $R -s "redirectUris=$POORT_URIS" >/dev/null
+  ok "Client df-poort bestaat al; adressen bijgewerkt"
+fi
+# oauth2-proxy (keycloak-oidc) wil zijn eigen client-id als audience in het token.
+if ! kc get "clients/$PID/protocol-mappers/models" -r $R | jq -e '.[] | select(.protocolMapper == "oidc-audience-mapper")' >/dev/null; then
+  kc create "clients/$PID/protocol-mappers/models" -r $R \
+    -s name=audience-poort -s protocol=openid-connect -s protocolMapper=oidc-audience-mapper \
+    -s 'config."included.client.audience"=df-poort' -s 'config."access.token.claim"=true' \
+    -s 'config."id.token.claim"=true' >/dev/null
+  ok "Audience-mapper voor de poort toegevoegd"
+fi
+
+# --- Herstelcodes (zoals bij de Office Assistent) --------------------------------------------
+# Na het koppelen van de app maakt iedereen twaalf herstelcodes aan; bij het inloggen
+# kan een code in plaats van de app ("Op een andere manier inloggen"). Elke code werkt
+# één keer. Het portaal ziet een herstelcode als tweede factor (amr "mfa").
+if ! kc get authentication/required-actions/CONFIGURE_RECOVERY_AUTHN_CODES -r $R >/dev/null 2>&1; then
+  kc create authentication/register-required-action -r $R \
+    -s providerId=CONFIGURE_RECOVERY_AUTHN_CODES -s name="Recovery Authentication Codes" >/dev/null 2>&1 || true
+fi
+kc update authentication/required-actions/CONFIGURE_RECOVERY_AUTHN_CODES -r $R \
+  -s alias=CONFIGURE_RECOVERY_AUTHN_CODES -s name="Recovery Authentication Codes" \
+  -s providerId=CONFIGURE_RECOVERY_AUTHN_CODES -s enabled=true -s defaultAction=false -s priority=55 >/dev/null 2>&1
+kc update authentication/required-actions/CONFIGURE_TOTP/config -r $R \
+  -b '{"config":{"add-recovery-codes":"true"}}' >/dev/null 2>&1 \
+  || waarschuw "Herstelcodes na het koppelen van de app verplicht maken lukte niet."
+BF="$(kc get "realms/$R" --fields browserFlow | jq -r '.browserFlow // "browser"')"
+BFU="$(jq -rn --arg f "$BF" '$f|@uri')"
+BEX="$(kc get "authentication/flows/$BFU/executions" -r $R)"
+OTPID="$(jq -r '[.[] | select(.providerId == "auth-otp-form")][0].id // empty' <<<"$BEX")"
+RCID="$(jq -r '[.[] | select(.providerId == "auth-recovery-authn-code-form")][0].id // empty' <<<"$BEX")"
+if [ -n "$OTPID" ] && [ -n "$RCID" ]; then
+  # De hele stap terugsturen, anders zet Keycloak de volgorde op 0 (zie oa-uitrol).
+  for X in "$OTPID" "$RCID"; do
+    kc update "authentication/flows/$BFU/executions" -r $R \
+      -b "$(jq -c --arg id "$X" '[.[] | select(.id == $id)][0] | .requirement = "ALTERNATIVE"
+            | if (.priority // 0) == 0 then .priority = (if .providerId == "auth-otp-form" then 30 else 50 end) else . end' <<<"$BEX")" >/dev/null
+  done
+  RCCFG="$(jq -r --arg id "$RCID" '[.[] | select(.id == $id)][0].authenticationConfig // empty' <<<"$BEX")"
+  if [ -n "$RCCFG" ]; then
+    kc update "authentication/config/$RCCFG" -r $R -b '{"alias":"df-herstelcode-referentie","config":{"default.reference.value":"mfa"}}' >/dev/null 2>&1
+  else
+    kc create "authentication/executions/$RCID/config" -r $R -b '{"alias":"df-herstelcode-referentie","config":{"default.reference.value":"mfa"}}' >/dev/null 2>&1
+  fi
+  ok "Herstelcodes: na het koppelen van de app, en bij het inloggen als alternatief voor de app"
+else
+  waarschuw "De inlogflow '$BF' heeft geen stap voor herstelcodes. Zet in Keycloak bij Authentication → $BF 'Recovery Authentication Code Form' op Alternative."
+fi
+# Wie al een app heeft maar nog geen codes: bij de volgende inlog.
+N=0
+while read -r U; do
+  [ -n "$U" ] || continue
+  SOORTEN="$(kc get "users/$U/credentials" -r $R 2>/dev/null | jq -r '[.[].type] | join(",")')"
+  [[ ",$SOORTEN," == *",otp,"* && ",$SOORTEN," != *",recovery-authn-codes,"* ]] || continue
+  ACTIES="$(kc get "users/$U" -r $R --fields requiredActions | jq -c '(.requiredActions // []) + ["CONFIGURE_RECOVERY_AUTHN_CODES"] | unique')"
+  kc update "users/$U" -r $R -s "requiredActions=$ACTIES" >/dev/null && N=$((N + 1))
+done < <(kc get users -r $R --fields id,username -q max=2000 | jq -r '.[] | select(.username | startswith("service-account-") | not) | .id')
+[ "$N" -gt 0 ] && ok "$N gebruiker(s) maken bij hun volgende inlog herstelcodes aan"
+
 # --- Client voor Trino --------------------------------------------------------------------
 TRINO="https://trino.$DOMEIN"
 TRID="$(kc get clients -r $R -q clientId=df-trino --fields id 2>/dev/null | jq -r '.[0].id // empty')"
@@ -255,10 +331,12 @@ fi
 SECRET="$(kc get "clients/$ID/client-secret" -r $R | jq -r .value)"
 OMSECRET="$(kc get "clients/$OMID/client-secret" -r $R | jq -r .value)"
 TRSECRET="$(kc get "clients/$TRID/client-secret" -r $R | jq -r .value)"
+POSECRET="$(kc get "clients/$PID/client-secret" -r $R | jq -r .value)"
 docker compose exec -T keycloak rm -f /tmp/df-kcadm.config
 zet PORTAAL_OIDC_ISSUER "https://id.$DOMEIN/realms/$R"
 zet PORTAAL_OIDC_GEHEIM "$SECRET"
 zet OM_OIDC_GEHEIM "$OMSECRET"
 zet TRINO_OIDC_GEHEIM "$TRSECRET"
-docker compose up -d portaal-migreer portaal openmetadata trino >/dev/null
+zet POORT_OIDC_GEHEIM "$POSECRET"
+docker compose up -d portaal-migreer portaal openmetadata trino poort >/dev/null
 ok "Het portaal, OpenMetadata en Trino loggen nu in via Keycloak (geheimen en uitgever staan in compose/.env)"

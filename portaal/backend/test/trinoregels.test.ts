@@ -85,3 +85,19 @@ test("de schrijver schrijft alleen als er iets veranderde", async () => {
   const regels = JSON.parse(await readFile(join(map, "rules.json"), "utf8"));
   assert.ok(regels.tables.some((t: { columns?: unknown[] }) => t.columns?.length === 3));
 });
+
+test("de poort: platform.bedienen of superadmin, alleen actieve accounts, nooit het hoofdaccount", async () => {
+  const { bouwLijst, PoortSchrijver } = await import("../src/poort.ts");
+  const g = (await pool.query("INSERT INTO groepen (naam, rechten, niveau) VALUES ('Platformbeheer', '{platform.bedienen}', 1) RETURNING id")).rows[0].id;
+  const s = (await pool.query("INSERT INTO groepen (naam, rechten, niveau, superadmin) VALUES ('Super', '{}', 4, true) RETURNING id")).rows[0].id;
+  for (const [email, groep, status] of [["ops@test.nl", g, "actief"], ["super@test.nl", s, "actief"], ["oudops@test.nl", g, "gedeactiveerd"]]) {
+    const a = (await pool.query("INSERT INTO accounts (email, naam, status) VALUES ($1, $1, $2) RETURNING id", [email, status])).rows[0].id;
+    await pool.query("INSERT INTO lidmaatschappen (account, groep) VALUES ($1, $2)", [a, groep]);
+  }
+  assert.deepEqual(await bouwLijst(pool), ["ops@test.nl", "super@test.nl"]);
+  const map = await mkdtemp(join(tmpdir(), "poort-"));
+  const w = new PoortSchrijver(pool, join(map, "toegestaan.txt"));
+  assert.equal(await w.schrijf(), true);
+  assert.equal(await w.schrijf(), false);
+  assert.equal(await readFile(join(map, "toegestaan.txt"), "utf8"), "ops@test.nl\nsuper@test.nl\n");
+});

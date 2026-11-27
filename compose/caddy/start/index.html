@@ -23,11 +23,13 @@
   <li><a href="https://admin.datafundament.haarlem.dev/">Portaal</a>
     <small>Platformstatus, dataproducten, toegang aanvragen en verwijderverzoeken. Inloggen via Keycloak, met tweede factor.</small></li>
   <li><a href="https://dagster.datafundament.haarlem.dev/">Dagster</a>
-    <small>De regisseur: de keten van bron tot dataproduct, runs, schema's en lineage.</small></li>
+    <small>De regisseur: de keten van bron tot dataproduct, runs, schema's en lineage. Via Keycloak, met het recht 'Dagster en catalogus bedienen'.</small></li>
   <li><a href="https://catalogus.datafundament.haarlem.dev/ui/">Lakekeeper</a>
-    <small>De Iceberg-catalogus: namespaces, tabellen, snapshots.</small></li>
+    <small>De Iceberg-catalogus: namespaces, tabellen, snapshots. Via Keycloak, met hetzelfde recht als Dagster.</small></li>
+  <li><a href="https://metadata.datafundament.haarlem.dev/">OpenMetadata</a>
+    <small>De catalogus van alle data: beschrijvingen, lineage, kwaliteit. Inloggen via Keycloak.</small></li>
   <li><a href="https://trino.datafundament.haarlem.dev/ui/">Trino</a>
-    <small>De voordeur voor afnemers. JDBC: <code>jdbc:trino://trino.datafundament.haarlem.dev:443?SSL=true</code>, met het wachtwoord van deze site.</small></li>
+    <small>De voordeur voor afnemers. JDBC: <code>jdbc:trino://trino.datafundament.haarlem.dev:443?SSL=true&amp;externalAuthentication=true</code>; inloggen via Keycloak. Wat je ziet, bepalen je toekenningen in het portaal.</small></li>
 </ul>
 <p><small>Testdata: fictieve personen uit vrijBRP (RvIG, GBA-V, Procura; EUPL-1.2). Geen echte persoonsgegevens.</small></p>
 </body>
