@@ -32,7 +32,7 @@ function Rechten({ g }: { g: Groep }) {
     </span>
   );
 }
-interface Groep { id: string; naam: string; omschrijving: string; rechten: string[]; niveau: number; superadmin: boolean; leden: number }
+interface Groep { id: string; naam: string; omschrijving: string; rechten: string[]; niveau: number; superadmin: boolean; leden: number; dataproducten?: string[] }
 type Invoer = Omit<Groep, "id" | "leden"> & { reden: string };
 
 export function Groepen({ ik }: { ik: Ik }) {
@@ -68,7 +68,10 @@ export function Groepen({ ik }: { ik: Ik }) {
               <TableRow key={g.id}>
                 <TableCell>{g.naam} {g.superadmin && <StatusBadge status="danger">{t("superadmin")}</StatusBadge>}<div className="ab-klein">{g.omschrijving}</div></TableCell>
                 <TableCell>{g.niveau}</TableCell>
-                <TableCell><Rechten g={g} /></TableCell>
+                <TableCell>
+                  <Rechten g={g} />
+                  {!!g.dataproducten?.length && <div className="ab-klein">{t("groepData")}: <span className="ab-mono">{g.dataproducten.join(", ")}</span></div>}
+                </TableCell>
                 <TableCell>{g.leden}</TableCell>
                 {kan && <TableCell><SecondaryActionButton onClick={() => zetBewerk(g)} aria-label={`${t("bewerken")}: ${g.naam}`}>{t("bewerken")}</SecondaryActionButton></TableCell>}
               </TableRow>

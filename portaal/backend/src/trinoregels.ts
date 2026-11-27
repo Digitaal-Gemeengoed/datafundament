@@ -7,7 +7,7 @@
  *
  *   - de dienstgebruiker van OpenMetadata en wie het recht lagen.lezen heeft
  *     (data-engineers): alles lezen;
- *   - wie een toekenning heeft: dat dataproduct lezen. Kolommen met in dbt het
+ *   - wie een toekenning heeft, zelf of als lid van een groep: dat dataproduct lezen. Kolommen met in dbt het
  *     label persoonsgegeven of bijzonder (meta.privacy) zijn gemaskeerd, tenzij de
  *     toekenning 'met persoonsgegevens' is;
  *   - verder niemand iets. Ook zonder manifest van dbt: dan is niet bekend welke
@@ -57,10 +57,14 @@ export async function bouwRegels(pool: pg.Pool, nu: Date, tabellen: Map<string, 
   const lezers = (await pool.query(
     `SELECT DISTINCT a.email FROM accounts a JOIN lidmaatschappen l ON l.account = a.id JOIN groepen g ON g.id = l.groep
       WHERE a.status = 'actief' AND 'lagen.lezen' = ANY (g.rechten) ORDER BY 1`)).rows.map((r) => r.email as string);
+  // Een toekenning voor een groep geldt voor wie nu lid is (DF-ADR-020).
   const toekenningen = (await pool.query(
     `SELECT a.email, t.dataproduct, bool_or(t.met_persoonsgegevens) AS met
-       FROM toegangsaanvragen t JOIN accounts a ON a.id = t.aanvrager
-      WHERE t.status = 'toegekend' AND a.status = 'actief' AND (t.gewenst_tot IS NULL OR t.gewenst_tot >= $1::date)
+       FROM toegangsaanvragen t
+       JOIN accounts a ON (t.groep IS NULL AND a.id = t.aanvrager)
+                       OR (t.groep IS NOT NULL AND a.id IN (SELECT l.account FROM lidmaatschappen l WHERE l.groep = t.groep))
+      WHERE t.status = 'toegekend' AND a.status = 'actief' AND NOT a.hoofdaccount
+        AND (t.gewenst_tot IS NULL OR t.gewenst_tot >= $1::date)
       GROUP BY a.email, t.dataproduct ORDER BY a.email, t.dataproduct`, [nu])).rows;
 
   const tables: object[] = [

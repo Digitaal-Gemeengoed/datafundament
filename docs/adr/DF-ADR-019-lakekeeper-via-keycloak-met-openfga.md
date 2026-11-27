@@ -32,7 +32,7 @@ Lakekeeper kan zelf inloggen via OpenID Connect en kan rechten bijhouden in Open
 - Lakekeeper weet nu wie wat doet. Trino kan in de catalogus niets wijzigen, ook niet bij een fout in de configuratie van Trino.
 - **Keycloak hoort nu bij de keten.** Zonder Keycloak geen token, en dan stopt de ingestie. Keycloak draait op dezelfde server; Dagster probeert het bij de volgende run opnieuw.
 - **Er komen vier geheimen bij** (drie service-accounts en de sleutel voor OpenFGA), en één dienst: OpenFGA, ongeveer 100 MB geheugen.
-- **De rechten van mensen in Lakekeeper staan los van het portaal.** Nu is alleen de eerste beheerder er beheerder. Andere mensen zien in de UI pas iets als een beheerder ze rechten geeft. Dat koppelen aan het portaal staat op de lijst voor later.
+- **De rechten van mensen in Lakekeeper komen uit het portaal** (sinds DF-ADR-020): `platform.bedienen` geeft metadata zien, superadmin geeft projectbeheer.
 - **LoQE (de SQL-editor in de UI) leest nog steeds geen data,** en dat blijft zo (DF-ADR-018): geen CORS en geen vended credentials op Garage.
 
 ## Getest

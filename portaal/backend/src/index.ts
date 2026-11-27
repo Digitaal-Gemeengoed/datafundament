@@ -10,6 +10,7 @@ import { dagelijks } from "./routes/audit.js";
 import { ontvanger } from "./datavragen.js";
 import { RegelSchrijver } from "./trinoregels.js";
 import { PoortSchrijver } from "./poort.js";
+import { LakekeeperRechten } from "./lakekeeper.js";
 
 const config = leesConfig();
 const pool = maakPool(config.databaseUrl);
@@ -17,6 +18,10 @@ const oidc = config.oidc ? new Oidc(config.oidc, `${config.herkomst}/api/auth/te
 const app = await bouwApp({ config, pool, oidc, mailer: maakMailer(config, (s) => console.log(s)) }, routes);
 const d = app.diensten;
 const poort = config.poortPad ? new PoortSchrijver(pool, config.poortPad) : null;
+const lakekeeper = config.lakekeeperRechten
+  ? new LakekeeperRechten(pool, { url: config.koppelingen.lakekeeper, ...config.lakekeeperRechten },
+      async (email) => (await d.keycloak?.inlogaccount(email))?.id ?? null)
+  : null;
 const regels = config.trinoRegels ? new RegelSchrijver(pool, config.trinoRegels.pad, config.trinoRegels.manifest, d.nu) : null;
 
 // Elke 30 seconden: geplande statuswijzigingen, en pogingen ouder dan een dag weg.
@@ -27,6 +32,10 @@ const taken = async () => {
     await dagelijks(d);
     if (regels && await regels.schrijf()) app.log.info("regels voor Trino bijgewerkt");
     if (poort && await poort.schrijf()) app.log.info("lijst voor de poort bijgewerkt");
+    if (lakekeeper) {
+      const n = await lakekeeper.bijwerken().catch((e) => { app.log.warn({ fout: (e as Error).message }, "rechten in Lakekeeper bijwerken mislukt"); return 0; });
+      if (n) app.log.info({ wijzigingen: n }, "rechten in Lakekeeper bijgewerkt");
+    }
   } catch (e) {
     app.log.error({ fout: (e as Error).message }, "periodieke taak mislukt");
   }

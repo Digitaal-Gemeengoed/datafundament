@@ -41,6 +41,8 @@ export interface Config {
    * portaal beheert geen inlogaccounts (geen knoppen voor uitnodiging en herstel).
    */
   keycloakIntern: string | null;
+  /** Rechten van mensen in Lakekeeper (DF-ADR-020); null als LK_BEHEER_GEHEIM niet is gezet. */
+  lakekeeperRechten: { tokenUrl: string; clientId: string; geheim: string } | null;
   smtp: { host: string; poort: number; gebruiker: string; wachtwoord: string; afzender: string; tls: "starttls" | "tls" | "geen" } | null;
   /**
    * De onderdelen van het platform, binnen het compose-netwerk. Het portaal
@@ -91,6 +93,14 @@ export function leesConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl: nodig(env, "DATABASE_URL"),
     hoofdaccountEmail: nodig(env, "HOOFDACCOUNT_EMAIL").toLowerCase(),
     keycloakIntern: oidcAan && env.KEYCLOAK_INTERN ? env.KEYCLOAK_INTERN.replace(/\/$/, "") : null,
+    lakekeeperRechten: oidcAan && env.KEYCLOAK_INTERN && env.LK_BEHEER_GEHEIM
+      ? {
+          // Binnen het netwerk, zoals bij het beheer van Keycloak; de issuer in het token blijft het openbare adres.
+          tokenUrl: `${env.KEYCLOAK_INTERN.replace(/\/$/, "")}${new URL(nodig(env, "OIDC_ISSUER")).pathname.replace(/\/$/, "")}/protocol/openid-connect/token`,
+          clientId: env.LK_BEHEER_CLIENT ?? "df-lk-beheer",
+          geheim: geheim(env, "LK_BEHEER_GEHEIM", 20),
+        }
+      : null,
     oidc: oidcAan
       ? { issuer: nodig(env, "OIDC_ISSUER").replace(/\/$/, ""), clientId: nodig(env, "OIDC_CLIENT_ID"), clientSecret: geheim(env, "OIDC_CLIENT_SECRET", 32) }
       : null,
