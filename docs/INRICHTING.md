@@ -205,6 +205,26 @@ Daarna werkt Dagster OpenMetadata bij na elke geslaagde keten, hoogstens één k
 
 Kom je bij de eerste inlog niet als beheerder binnen? Kijk dan of `OM_BEHEERDER` in `compose/.env` gelijk is aan het deel vóór de @ van je e-mailadres. Daarna: `sudo docker compose -f /opt/datafundament/compose/compose.yml up -d openmetadata`.
 
+## 10. Trino via Keycloak
+
+Ook dit zet het installatiescript neer:
+
+- de client `df-trino` in Keycloak;
+- het wachtwoord voor de dienst `openmetadata`;
+- een leeg regelbestand: tot het portaal het vult, mag niemand iets.
+
+Trino vraagt daarna geen wachtwoord van Caddy meer. Je logt in via Keycloak:
+
+- **web-UI:** `https://trino.datafundament.haarlem.dev/ui/`
+- **DBeaver of JDBC:** `jdbc:trino://trino.datafundament.haarlem.dev:443?SSL=true&externalAuthentication=true`. Bij het verbinden opent de browser.
+
+Wie wat mag, regel je in het portaal:
+
+- **Data-engineers:** een groep met het recht *Alle lagen via Trino*. Superadmin geeft dit recht niet vanzelf.
+- **Anderen:** een toegangsaanvraag per dataproduct. Kolommen die in dbt als persoonsgegeven zijn gelabeld, zijn gemaskeerd, tenzij de beoordelaar *Met persoonsgegevens* aanvinkt.
+
+Onder Toegang → Regels voor Trino zie je wat Trino nu krijgt.
+
 ## Daarna
 
 - **DNS:** het domein is `datafundament.haarlem.dev`. Twee A-records, beide naar 207.180.253.52 (dfc):
@@ -212,4 +232,4 @@ Kom je bij de eerste inlog niet als beheerder binnen? Kijk dan of `OM_BEHEERDER`
   - `*.datafundament.haarlem.dev`
 
   Caddy haalt per naam een certificaat op. De namen: `datafundament.` (startpagina, later het portaal), `dagster.`, `metadata.` (OpenMetadata), `catalogus.` (Lakekeeper), `trino.` en `id.` (Keycloak). dfw krijgt geen publieke naam.
-- **Volgt:** Trino via Keycloak, met rechten per kolom.
+- **Volgt:** zie de lijst 'nog niet gebouwd' in het opleveringsdocument.

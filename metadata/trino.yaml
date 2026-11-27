@@ -7,8 +7,11 @@ source:
   serviceConnection:
     config:
       type: Trino
-      hostPort: trino:8080
+      # Via Caddy (HTTPS): Trino neemt een wachtwoord alleen over TLS aan (DF-ADR-017).
+      hostPort: trino.${DOMEIN}:443
       username: openmetadata
+      authType:
+        password: ${TRINO_OM_WACHTWOORD}
   sourceConfig:
     config:
       type: DatabaseMetadata

@@ -10,6 +10,8 @@
 #   - realm 'datafundament', met brute-force-detectie;
 #   - een vertrouwelijke client 'df-portaal' (authorization code + PKCE);
 #   - een vertrouwelijke client 'df-metadata' voor OpenMetadata (DF-ADR-007);
+#   - een vertrouwelijke client 'df-trino' voor Trino, met df-trino als audience
+#     in het access token (DF-ADR-017);
 #   - de AMR-mapper, zodat het id_token meldt dat er een tweede factor was;
 #   - op de OTP-stap van de inlogflow de referentiewaarde 'otp';
 #   - op verzoek een gebruiker voor jezelf (e-mail geverifieerd; bij de eerste
@@ -98,6 +100,36 @@ else
   ok "Client df-metadata bestaat al; adressen gezet op $METADATA"
 fi
 
+# --- Client voor Trino --------------------------------------------------------------------
+TRINO="https://trino.$DOMEIN"
+TRID="$(kc get clients -r $R -q clientId=df-trino --fields id 2>/dev/null | jq -r '.[0].id // empty')"
+if [ -z "$TRID" ]; then
+  kc create clients -r $R \
+    -s clientId=df-trino -s name="Trino" -s enabled=true \
+    -s protocol=openid-connect -s publicClient=false -s clientAuthenticatorType=client-secret \
+    -s secret="$(geheim 32)" \
+    -s standardFlowEnabled=true -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
+    -s "redirectUris=[\"$TRINO/oauth2/callback\"]" -s "webOrigins=[\"$TRINO\"]" -s "rootUrl=$TRINO" \
+    -s "attributes.\"post.logout.redirect.uris\"=$TRINO/ui/logout/logout.html" >/dev/null
+  TRID="$(kc get clients -r $R -q clientId=df-trino --fields id | jq -r '.[0].id')"
+  ok "Client df-trino aangemaakt"
+else
+  kc update "clients/$TRID" -r $R \
+    -s "redirectUris=[\"$TRINO/oauth2/callback\"]" -s "webOrigins=[\"$TRINO\"]" -s "rootUrl=$TRINO" >/dev/null
+  ok "Client df-trino bestaat al; adressen gezet op $TRINO"
+fi
+# Trino neemt alleen een access token aan met zijn eigen client-id als audience.
+if kc get "clients/$TRID/protocol-mappers/models" -r $R | jq -e '.[] | select(.protocolMapper == "oidc-audience-mapper")' >/dev/null; then
+  ok "Audience-mapper voor Trino staat er al"
+else
+  kc create "clients/$TRID/protocol-mappers/models" -r $R \
+    -s name=audience-trino -s protocol=openid-connect -s protocolMapper=oidc-audience-mapper \
+    -s 'config."included.client.audience"=df-trino' -s 'config."access.token.claim"=true' \
+    -s 'config."id.token.claim"=false' >/dev/null
+  ok "Audience-mapper voor Trino toegevoegd"
+fi
+
 # --- AMR-mapper ----------------------------------------------------------------------
 if kc get "clients/$ID/protocol-mappers/models" -r $R | jq -e '.[] | select(.protocolMapper == "oidc-amr-mapper")' >/dev/null; then
   ok "AMR-mapper staat er al"
@@ -162,9 +194,11 @@ fi
 # --- Het portaal koppelen ------------------------------------------------------------------
 SECRET="$(kc get "clients/$ID/client-secret" -r $R | jq -r .value)"
 OMSECRET="$(kc get "clients/$OMID/client-secret" -r $R | jq -r .value)"
+TRSECRET="$(kc get "clients/$TRID/client-secret" -r $R | jq -r .value)"
 docker compose exec -T keycloak rm -f /tmp/df-kcadm.config
 zet PORTAAL_OIDC_ISSUER "https://id.$DOMEIN/realms/$R"
 zet PORTAAL_OIDC_GEHEIM "$SECRET"
 zet OM_OIDC_GEHEIM "$OMSECRET"
-docker compose up -d portaal-migreer portaal openmetadata >/dev/null
-ok "Het portaal en OpenMetadata loggen nu in via Keycloak (geheimen en uitgever staan in compose/.env)"
+zet TRINO_OIDC_GEHEIM "$TRSECRET"
+docker compose up -d portaal-migreer portaal openmetadata trino >/dev/null
+ok "Het portaal, OpenMetadata en Trino loggen nu in via Keycloak (geheimen en uitgever staan in compose/.env)"

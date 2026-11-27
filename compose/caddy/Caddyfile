@@ -27,13 +27,12 @@ dagster.{$DOMEIN} {
 	reverse_proxy dagster-webserver:3000
 }
 
-# Trino: de voordeur voor afnemers (JDBC, CLI, web-UI). Het wachtwoord van Caddy
-# is ook het wachtwoord voor JDBC; Caddy stuurt het niet door naar Trino.
+# Trino: de voordeur voor afnemers (JDBC, CLI, web-UI). Trino logt zelf in via
+# Keycloak (DF-ADR-017); geen wachtwoord van Caddy ervoor.
 trino.{$DOMEIN} {
-	import afgeschermd
-	reverse_proxy trino:8080 {
-		header_up -Authorization
-	}
+	header -Server
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy trino:8080
 }
 
 # Lakekeeper: de Iceberg-catalogus, met web-UI op /ui.

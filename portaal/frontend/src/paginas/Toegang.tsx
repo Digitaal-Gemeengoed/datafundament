@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
-  FormField, FormLabel, Heading1, Heading2, Paragraph, PrimaryActionButton, SecondaryActionButton, StatusBadge,
+  Checkbox, FormField, FormLabel, Heading1, Heading2, Paragraph, PrimaryActionButton, SecondaryActionButton, StatusBadge,
   Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Textarea, Textbox,
 } from "@utrecht/component-library-react";
 import { api, type Ik } from "../api";
@@ -9,7 +9,7 @@ import { foutTekst, MeldingVak, useLaden, type Melding } from "./gedeeld";
 
 interface Aanvraag {
   id: string; dataproduct: string; doel: string; grondslag: string; gewenst_tot: string | null; status: string;
-  toelichting: string | null; aangemaakt: string; beoordeeld: string | null; aanvrager: string; aanvrager_email: string;
+  toelichting: string | null; met_persoonsgegevens: boolean; aangemaakt: string; beoordeeld: string | null; aanvrager: string; aanvrager_email: string;
   beoordelaar: string | null; eigen: boolean; mag_beoordelen: boolean;
 }
 const KLEUR: Record<string, "success" | "danger" | "warning" | "neutral"> = { toegekend: "success", afgewezen: "danger", ingetrokken: "neutral", aangevraagd: "warning" };
@@ -45,6 +45,7 @@ export function Toegang({ ik }: { ik: Ik }) {
                 <TableCell>{a.doel}<div className="ab-klein">{t("grondslag")}: {a.grondslag}</div></TableCell>
                 <TableCell>
                   <StatusBadge status={KLEUR[a.status] ?? "neutral"}>{t(`st_${a.status}` as never)}</StatusBadge>
+                  {a.status === "toegekend" && <div className="ab-klein">{t(a.met_persoonsgegevens ? "metPersoonsgegevensKort" : "gemaskeerdKort")}</div>}
                   {a.beoordelaar && <div className="ab-klein">{a.beoordelaar}</div>}
                   {a.toelichting && <div className="ab-klein">{a.toelichting}</div>}
                 </TableCell>
@@ -98,12 +99,13 @@ function Nieuw({ klaar }: { klaar: (m: Melding) => void }) {
 function Acties({ a, beoordelaar, klaar }: { a: Aanvraag; beoordelaar: boolean; klaar: (m: Melding) => void }) {
   const [open, zetOpen] = useState<null | "toegekend" | "afgewezen" | "intrekken">(null);
   const [toel, zetToel] = useState("");
+  const [met, zetMet] = useState(false);
   const kanIntrekken = (a.eigen && a.status === "aangevraagd") || (beoordelaar && !a.eigen && a.status === "toegekend");
   if (!a.mag_beoordelen && !kanIntrekken) return <>{a.eigen && a.status === "aangevraagd" ? <span className="ab-klein">{t("vierOgen")}</span> : "—"}</>;
   const doe = async () => {
     try {
       if (open === "intrekken") await api("POST", `/api/toegang/${a.id}/intrekken`, { toelichting: toel });
-      else await api("POST", `/api/toegang/${a.id}/beoordeling`, { besluit: open, toelichting: toel });
+      else await api("POST", `/api/toegang/${a.id}/beoordeling`, { besluit: open, toelichting: toel, ...(open === "toegekend" ? { met_persoonsgegevens: met } : {}) });
       klaar({ soort: "ok", tekst: t(open === "intrekken" ? "st_ingetrokken" : `st_${open}` as never) });
     } catch (x) {
       klaar({ soort: "fout", tekst: foutTekst(x) });
@@ -115,6 +117,10 @@ function Acties({ a, beoordelaar, klaar }: { a: Aanvraag; beoordelaar: boolean; 
         <FormField label={<FormLabel htmlFor={`a-${a.id}`}>{t("toelichting")}</FormLabel>} description={t("toelichtingUitleg")}>
           <Textarea id={`a-${a.id}`} rows={2} value={toel} minLength={5} maxLength={2000} onChange={(e) => zetToel(e.target.value)} />
         </FormField>
+        {open === "toegekend" && (
+          <FormField type="checkbox" label={<FormLabel htmlFor={`p-${a.id}`} type="checkbox">{t("metPersoonsgegevens")}</FormLabel>} description={t("metPersoonsgegevensUitleg")}
+            input={<Checkbox id={`p-${a.id}`} checked={met} onChange={(e) => zetMet(e.target.checked)} />} />
+        )}
         <div className="ab-knoppen">
           <PrimaryActionButton onClick={doe} disabled={toel.trim().length < 5}>{t(open === "toegekend" ? "toekennen" : open === "afgewezen" ? "afwijzen" : "intrekken")}</PrimaryActionButton>
           <SecondaryActionButton onClick={() => zetOpen(null)}>{t("annuleren")}</SecondaryActionButton>

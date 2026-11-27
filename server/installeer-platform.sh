@@ -26,7 +26,7 @@ umask 077; touch "$ENV"; umask 022; chmod 600 "$ENV"
 vul_aan DOMEIN datafundament.haarlem.dev
 for n in DB_WACHTWOORD LK_DB_WACHTWOORD DAGSTER_DB_WACHTWOORD DWH_SCHRIJVER_WACHTWOORD DWH_LEZER_WACHTWOORD \
          KC_DB_WACHTWOORD KC_BEHEERDER_WACHTWOORD PORTAAL_DB_WACHTWOORD PORTAAL_APP_WACHTWOORD KLUIS_DB_WACHTWOORD \
-         OM_DB_WACHTWOORD; do
+         OM_DB_WACHTWOORD TRINO_OM_WACHTWOORD; do
   vul_aan "$n" "$(geheim 24)"
 done
 vul_aan LK_SLEUTEL "$(geheim 32)"
@@ -37,6 +37,8 @@ vul_aan GARAGE_RPC_GEHEIM "$(geheim 32)"
 # OpenMetadata (DF-ADR-007): een eigen Fernet-sleutel en sleutel-id voor de tokens.
 vul_aan OM_FERNET_SLEUTEL "$(openssl rand -base64 32 | tr '+/' '-_')"
 vul_aan OM_JWT_SLEUTEL_ID "$(geheim 16)"
+# Trino (DF-ADR-017): de sleutel tussen de onderdelen van Trino.
+vul_aan TRINO_INTERN_GEHEIM "$(geheim 32)"
 for k in BEHEER LAKEKEEPER SCHRIJVER LEZER LANDING; do
   vul_aan "GARAGE_${k}_SLEUTEL" "GK$(geheim 12)"
   vul_aan "GARAGE_${k}_GEHEIM" "$(geheim 32)"
@@ -91,6 +93,19 @@ if [ ! -f "$OMS/private_key.der" ]; then
   ok "Eigen RSA-sleutels voor OpenMetadata"
 fi
 chown -R 65532:65532 "$OMS"; chmod 700 "$OMS"; chmod 400 "$OMS"/*.der
+# Trino (DF-ADR-017): de regels schrijft het portaal (uid 1000, net als Trino); tot
+# dan mag niemand iets. Het wachtwoord van de dienstgebruiker openmetadata (bcrypt).
+TR="$DF_REPO/compose/trino"
+install -d -m 755 -o 1000 -g 1000 "$TR/regels" "$TR/wachtwoorden"
+[ -f "$TR/regels/rules.json" ] || printf '{"catalogs": [{"allow": "none"}], "tables": [{"privileges": []}]}\n' > "$TR/regels/rules.json"
+chown 1000:1000 "$TR/regels/rules.json"
+if [ ! -s "$TR/wachtwoorden/wachtwoorden.db" ]; then
+  docker run --rm httpd:2.4-alpine htpasswd -nbBC 10 openmetadata "$(waarde TRINO_OM_WACHTWOORD)" \
+    | sed '/^$/d' > "$TR/wachtwoorden/wachtwoorden.db"
+  chown 1000:1000 "$TR/wachtwoorden/wachtwoorden.db"; chmod 400 "$TR/wachtwoorden/wachtwoorden.db"
+  ok "Wachtwoord voor de dienstgebruiker openmetadata in Trino"
+fi
+
 # OpenSearch (de zoekindex van OpenMetadata) vraagt meer geheugenkaarten.
 if [ "$(sysctl -n vm.max_map_count)" -lt 262144 ]; then
   echo "vm.max_map_count=262144" > /etc/sysctl.d/90-datafundament.conf
@@ -188,7 +203,7 @@ meld "De rest: Trino, Dagster, Keycloak, portaal, OpenMetadata, Caddy"
 docker compose up -d --remove-orphans
 ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
 
-if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ]; then
+if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ] || [ -z "$(waarde TRINO_OIDC_GEHEIM)" ]; then
   "$DF_REPO/server/keycloak.sh"
 fi
 
@@ -200,8 +215,8 @@ cat <<EOF
   Startpagina:  https://$D/
   Dagster:      https://dagster.$D/
   Lakekeeper:   https://catalogus.$D/ui/
-  Trino:        https://trino.$D/ui/
-                JDBC: jdbc:trino://trino.$D:443?SSL=true
+  Trino:        https://trino.$D/ui/   (inloggen via Keycloak)
+                JDBC: jdbc:trino://trino.$D:443?SSL=true&externalAuthentication=true
 
   Gebruiker:    $(waarde WEB_GEBRUIKER)
   Wachtwoord:   $(waarde WEB_WACHTWOORD)

@@ -8,12 +8,14 @@ import { ruimPogingenOp } from "./pogingen.js";
 import { routes } from "./routes/index.js";
 import { dagelijks } from "./routes/audit.js";
 import { ontvanger } from "./datavragen.js";
+import { RegelSchrijver } from "./trinoregels.js";
 
 const config = leesConfig();
 const pool = maakPool(config.databaseUrl);
 const oidc = config.oidc ? new Oidc(config.oidc, `${config.herkomst}/api/auth/terug`) : null;
 const app = await bouwApp({ config, pool, oidc, mailer: maakMailer(config, (s) => console.log(s)) }, routes);
 const d = app.diensten;
+const regels = config.trinoRegels ? new RegelSchrijver(pool, config.trinoRegels.pad, config.trinoRegels.manifest, d.nu) : null;
 
 // Elke 30 seconden: geplande statuswijzigingen, en pogingen ouder dan een dag weg.
 const taken = async () => {
@@ -21,11 +23,13 @@ const taken = async () => {
     await voerStatuswijzigingenUit(pool, d.nu());
     await ruimPogingenOp(d);
     await dagelijks(d);
+    if (regels && await regels.schrijf()) app.log.info("regels voor Trino bijgewerkt");
   } catch (e) {
     app.log.error({ fout: (e as Error).message }, "periodieke taak mislukt");
   }
 };
 setInterval(taken, 30_000).unref();
+await taken();
 
 // Het token van de kluis is periodiek (768 uur): bij het starten en elke dag verlengen.
 const verleng = () => d.koppelingen.verlengKluisToken().then((ok) => { if (config.koppelingen.kluis && !ok) app.log.warn("token van de kluis verlengen lukte niet"); });

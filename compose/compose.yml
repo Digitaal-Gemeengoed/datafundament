@@ -55,6 +55,9 @@ x-werk-omgeving: &werk-omgeving
   # OpenMetadata bijwerken (orkestratie/metadata.py): het token van de ingestion-bot.
   # Leeg tot je het hebt gezet met server/metadata-token.sh; de job slaat dan over.
   OPENMETADATA_BOT_TOKEN: ${OPENMETADATA_BOT_TOKEN:-}
+  # OpenMetadata leest Trino via Caddy (HTTPS), als dienstgebruiker (DF-ADR-017).
+  DOMEIN: ${DOMEIN:?}
+  TRINO_OM_WACHTWOORD: ${TRINO_OM_WACHTWOORD:?}
 
 # OpenMetadata (DF-ADR-007): inloggen via Keycloak, de database in db, OpenSearch
 # als zoekindex. Zonder Airflow: PIPELINE_SERVICE_CLIENT_ENABLED staat uit.
@@ -185,9 +188,18 @@ services:
       GARAGE_LEZER_GEHEIM: ${GARAGE_LEZER_GEHEIM:?}
       DWH_LEZER_WACHTWOORD: ${DWH_LEZER_WACHTWOORD}
       DATAVRAGEN_TOKEN: ${DATAVRAGEN_TOKEN:?}
+      # Inloggen via Keycloak en de interne sleutel (DF-ADR-017).
+      DOMEIN: ${DOMEIN:?}
+      TRINO_OIDC_GEHEIM: ${TRINO_OIDC_GEHEIM:-nog-niet-gezet}
+      TRINO_INTERN_GEHEIM: ${TRINO_INTERN_GEHEIM:?}
     volumes:
       - ./trino/config.properties:/etc/trino/config.properties:ro
       - ./trino/http-event-listener.properties:/etc/trino/http-event-listener.properties:ro
+      - ./trino/access-control.properties:/etc/trino/access-control.properties:ro
+      - ./trino/password-authenticator.properties:/etc/trino/password-authenticator.properties:ro
+      # Geschreven door het portaal en het installatiescript; hier alleen lezen.
+      - ./trino/regels:/etc/trino/regels:ro
+      - ./trino/wachtwoorden:/etc/trino/wachtwoorden:ro
       - ../datahub/trino/catalog:/etc/trino/catalog:ro
     depends_on: [lakekeeper, db]
 
@@ -273,6 +285,9 @@ services:
       DAGSTER_URL: http://dagster-webserver:3000
       DAGSTER_LOCATIE: datafundament
       LAKEKEEPER_URL: http://lakekeeper:8181
+      # De regels voor Trino (DF-ADR-017), uit de toekenningen en het manifest van dbt.
+      TRINO_REGELS_PAD: /var/lib/trino-regels/rules.json
+      DBT_MANIFEST: /var/lib/dbt/laatste/manifest.json
       OPENMETADATA_URL: http://openmetadata:8585
       TRINO_URL: http://trino:8080
       GARAGE_URL: http://garage:3903
@@ -293,6 +308,11 @@ services:
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     environment: *portaal-omgeving
+    volumes:
+      # Het portaal schrijft de regels voor Trino; het manifest van dbt zegt welke
+      # kolommen gevoelig zijn (DF-ADR-017).
+      - ./trino/regels:/var/lib/trino-regels
+      - dbtuitvoer:/var/lib/dbt:ro
     depends_on:
       portaal-migreer: { condition: service_completed_successfully }
 

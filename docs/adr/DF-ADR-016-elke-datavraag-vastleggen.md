@@ -35,3 +35,7 @@ Trino is de enige voordeur (DF-ADR-008). Dat heeft pas waarde als ook vastligt w
 - **De OpenLineage-listener** naar OpenMetadata: geeft herkomst, maar geen volledig toegangslog met gebruiker en SQL. Kan er later náást (DF-ADR-007).
 - **De Kafka-listener:** zwaar voor een PoC.
 - **Een aparte dienst als ontvanger:** schoner, maar weer iets om te beheren. Het portaal heeft al een database met de juiste rechten en een zoekpagina.
+
+## Aanvulling (27 november 2026)
+
+Trino logt nu in via Keycloak (DF-ADR-017). De gebruiker in het log is daarmee een geverifieerd e-mailadres, of de dienst `openmetadata`.
