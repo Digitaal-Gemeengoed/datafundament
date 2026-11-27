@@ -110,7 +110,7 @@ Het script vraagt één keer het wachtwoord van `dlt_lezer` (op dfw: `sudo ./bro
 
 - haalt het de images op (vastgepinde versies) en bouwt de code;
 - start PostgreSQL met PostGIS en Garage, en zet in Garage een eigen sleutel per onderdeel (Lakekeeper en de schrijvers lezen en schrijven, Trino leest alleen);
-- richt Lakekeeper in, met het warehouse `datafundament` op Garage;
+- richt Lakekeeper in, met het warehouse `datafundament` op Garage. Lakekeeper logt in via Keycloak en houdt de rechten bij in OpenFGA: dlt en dbt mogen schrijven, Trino alleen lezen (DF-ADR-019);
 - start Trino, Dagster en Caddy.
 
 Aan het eind toont het de adressen en het wachtwoord voor de websites. Opnieuw draaien kan altijd; geheimen en data blijven staan.
@@ -119,7 +119,7 @@ Aan het eind toont het de adressen en het wachtwoord voor de websites. Opnieuw d
 |---|---|
 | `https://datafundament.haarlem.dev/` | startpagina |
 | `https://dagster.datafundament.haarlem.dev/` | Dagster: de keten, runs en lineage |
-| `https://catalogus.datafundament.haarlem.dev/ui/` | Lakekeeper: de Iceberg-catalogus |
+| `https://catalogus.datafundament.haarlem.dev/ui/` | Lakekeeper: de Iceberg-catalogus (inloggen via Keycloak; de eerste beheerder is er beheerder) |
 | `https://trino.datafundament.haarlem.dev/ui/` | Trino; JDBC `jdbc:trino://trino.datafundament.haarlem.dev:443?SSL=true` |
 
 De ingestie van de bron draait elke 5 minuten.

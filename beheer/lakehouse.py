@@ -15,8 +15,12 @@ def verbind():
     con.execute(f"""CREATE SECRET garage (TYPE s3, KEY_ID '{os.environ["GARAGE_SCHRIJVER_SLEUTEL"]}',
         SECRET '{os.environ["GARAGE_SCHRIJVER_GEHEIM"]}', ENDPOINT 'garage:3900', URL_STYLE 'path',
         USE_SSL false, REGION 'garage')""")
+    # Lakekeeper vraagt een token van Keycloak: service-account df-lk-werk (DF-ADR-019).
+    con.execute(f"""CREATE SECRET lakekeeper (TYPE iceberg, CLIENT_ID 'df-lk-werk',
+        CLIENT_SECRET '{os.environ["LK_WERK_GEHEIM"]}', OAUTH2_SCOPE 'lakekeeper',
+        OAUTH2_SERVER_URI '{os.environ["PYICEBERG_CATALOG__DEFAULT__OAUTH2_SERVER_URI"]}')""")
     con.execute("""ATTACH 'datafundament' AS lakehouse (TYPE iceberg, ENDPOINT 'http://lakekeeper:8181/catalog',
-        AUTHORIZATION_TYPE 'none', ACCESS_DELEGATION_MODE 'none')""")
+        SECRET lakekeeper, ACCESS_DELEGATION_MODE 'none')""")
     return con
 
 
