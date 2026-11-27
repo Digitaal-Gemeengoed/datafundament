@@ -62,6 +62,8 @@ export interface Config {
    * manifest van dbt staat (welke kolommen gevoelig zijn). Null: geen regels.
    */
   trinoRegels: { pad: string; manifest: string } | null;
+  /** Waar het portaal de lijst schrijft van wie door de poort mag (DF-ADR-018); null: geen lijst. */
+  poortPad: string | null;
   /**
    * Het token waarmee Trino zijn gebeurtenissen aflevert op de interne poort
    * (DF-ADR-016). Zonder token luistert de ontvanger niet.
@@ -116,6 +118,7 @@ export function leesConfig(env: NodeJS.ProcessEnv = process.env): Config {
     trinoRegels: env.TRINO_REGELS_PAD
       ? { pad: env.TRINO_REGELS_PAD, manifest: env.DBT_MANIFEST ?? "/var/lib/dbt/laatste/manifest.json" }
       : null,
+    poortPad: env.POORT_PAD ?? null,
     datavragen: env.DATAVRAGEN_TOKEN
       ? { token: geheim(env, "DATAVRAGEN_TOKEN", 32), poort: Number(env.DATAVRAGEN_POORT ?? 4301) }
       : null,

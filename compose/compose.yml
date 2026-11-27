@@ -11,7 +11,9 @@
 #   portaal             het portaal: platform, dataproducten, toegang, verwijderen (DF-ADR-013)
 #   OpenMetadata        de catalogus, met OpenSearch als zoekindex, op metadata.<domein>;
 #                       de ingestie draait als job in Dagster, zonder Airflow (DF-ADR-007)
-#   Caddy               TLS en de enige ingang; de onderdelen nog met één wachtwoord
+#   poort               oauth2-proxy: Dagster en de catalogus alleen via Keycloak, voor wie
+#                       in het portaal het recht platform.bedienen heeft (DF-ADR-018)
+#   Caddy               TLS en de enige ingang
 #
 # Installeren en bijwerken: sudo /opt/datafundament/server/installeer-platform.sh
 # Versies zijn vastgepind; zie proeven/iceberg-schrijfpad (DF-ADR-004).
@@ -296,6 +298,8 @@ services:
       SMTP_HOST: ${SMTP_HOST:-}
       # Inlogaccounts in Keycloak beheren (uitnodiging, herstel), via het compose-netwerk.
       KEYCLOAK_INTERN: http://keycloak:8080
+      # Wie door de poort mag (DF-ADR-018); het portaal schrijft de lijst.
+      POORT_PAD: /var/lib/poort/toegestaan.txt
       SMTP_POORT: ${SMTP_POORT:-587}
       SMTP_TLS: ${SMTP_TLS:-starttls}
       SMTP_GEBRUIKER: ${SMTP_GEBRUIKER:-}
@@ -318,6 +322,7 @@ services:
       # Het portaal schrijft de regels voor Trino; het manifest van dbt zegt welke
       # kolommen gevoelig zijn (DF-ADR-017).
       - ./trino/regels:/var/lib/trino-regels
+      - ./poort:/var/lib/poort
       - dbtuitvoer:/var/lib/dbt:ro
     depends_on:
       portaal-migreer: { condition: service_completed_successfully }
@@ -370,6 +375,36 @@ services:
       interval: 15s
       retries: 40
 
+  # De poort voor Dagster en de catalogus (DF-ADR-018): Caddy vraagt bij elke
+  # aanvraag of de bezoeker via Keycloak is ingelogd (met tweede factor) en op de
+  # lijst van het portaal staat. Eén cookie voor alle namen onder het domein.
+  poort:
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.6
+    restart: unless-stopped
+    environment:
+      OAUTH2_PROXY_PROVIDER: keycloak-oidc
+      OAUTH2_PROXY_PROVIDER_DISPLAY_NAME: Keycloak
+      OAUTH2_PROXY_OIDC_ISSUER_URL: https://id.${DOMEIN}/realms/datafundament
+      OAUTH2_PROXY_CLIENT_ID: df-poort
+      OAUTH2_PROXY_CLIENT_SECRET: ${POORT_OIDC_GEHEIM:-nog-niet-gezet}
+      OAUTH2_PROXY_CODE_CHALLENGE_METHOD: S256
+      OAUTH2_PROXY_COOKIE_SECRET: ${POORT_COOKIE_GEHEIM:?}
+      OAUTH2_PROXY_COOKIE_NAME: __Secure-df_poort
+      OAUTH2_PROXY_COOKIE_DOMAINS: .${DOMEIN}
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_COOKIE_EXPIRE: 12h
+      OAUTH2_PROXY_WHITELIST_DOMAINS: .${DOMEIN}
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/poort/toegestaan.txt
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_SET_XAUTHREQUEST: "true"
+      OAUTH2_PROXY_UPSTREAMS: static://202
+    volumes:
+      - ./poort:/etc/poort:ro
+    depends_on: [keycloak]
+
   caddy:
     image: caddy:2.10
     restart: unless-stopped
@@ -378,14 +413,12 @@ services:
       - "443:443"
     environment:
       DOMEIN: ${DOMEIN:?}
-      WEB_GEBRUIKER: ${WEB_GEBRUIKER:?}
-      WEB_WACHTWOORD_HASH: ${WEB_WACHTWOORD_HASH:?}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - ./caddy/start:/srv/start:ro
       - caddydata:/data
       - caddyconfig:/config
-    depends_on: [dagster-webserver, trino, lakekeeper, portaal, keycloak]
+    depends_on: [dagster-webserver, trino, lakekeeper, portaal, keycloak, poort]
 
 volumes:
   dbdata:

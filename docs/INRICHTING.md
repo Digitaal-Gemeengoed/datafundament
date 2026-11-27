@@ -206,6 +206,10 @@ Draai daarna `sudo /opt/datafundament/server/installeer-platform.sh`. Het portaa
   Een nieuwe app komt naast de oude. De oude verwijdert de gebruiker zelf in zijn account. Stuur een herstel alleen als vaststaat dat de vraag van de gebruiker zelf komt.
 - **Zelf herstellen:** op de inlogpagina van Keycloak staat *Wachtwoord vergeten?*. De link in de mail vraagt een nieuw wachtwoord en toont ook de QR-code opnieuw. Zo komt wie zijn app kwijt is weer binnen, maar alleen met toegang tot zijn eigen mailbox.
 
+**Herstelcodes.** Na het koppelen van de app maakt iedereen twaalf herstelcodes aan. Bewaar ze buiten je telefoon: printen, of in een wachtwoordmanager. Ben je je app kwijt, kies dan bij het inloggen *Op een andere manier inloggen → Herstelcode*. Koppel daarna in je account (`https://id.datafundament.haarlem.dev/realms/datafundament/account`) een nieuwe app. Elke code werkt één keer.
+
+**Dagster en de catalogus** gaan via de poort (DF-ADR-018). Inloggen gaat via Keycloak, en alleen met het recht *Dagster en catalogus bedienen* of superadmin. Het oude gedeelde wachtwoord van Caddy bestaat niet meer.
+
 Zonder mailserver werkt geen van deze routes. Een nieuwe gebruiker krijgt dan van de beheerder een tijdelijk wachtwoord via `server/keycloak.sh`.
 
 ## 9. OpenMetadata

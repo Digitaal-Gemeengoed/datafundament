@@ -29,6 +29,7 @@ const T = {
   recht_datavragen: ["Datavragen", "Data queries"],
   recht_lagen: ["Alle lagen via Trino (data-engineers)", "All layers through Trino (data engineers)"],
   rechtLezen: ["lezen", "read"],
+  rechtBedienen: ["Dagster en catalogus bedienen", "operate Dagster and catalogue"],
   metPersoonsgegevens: ["Met persoonsgegevens", "Including personal data"],
   metPersoonsgegevensUitleg: ["Kolommen die in dbt als persoonsgegeven of bijzonder persoonsgegeven zijn gelabeld, zijn anders leeg (gemaskeerd). Alleen aanvinken als het doel en de grondslag ze nodig maken.", "Columns labelled in dbt as personal or special-category data are otherwise empty (masked). Only tick this if the purpose and legal basis require them."],
   metPersoonsgegevensKort: ["met persoonsgegevens", "including personal data"],

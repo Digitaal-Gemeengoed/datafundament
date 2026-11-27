@@ -12,11 +12,13 @@ export const RECHTEN = [
   // Lezen in alle lagen via Trino, voor data-engineers (migratie 005). Komt niet
   // mee met superadmin: beheer van het portaal is geen toegang tot data.
   "lagen.lezen",
+  // Dagster en de Iceberg-catalogus, via de poort (migratie 006).
+  "platform.bedienen",
 ] as const;
 export type Recht = (typeof RECHTEN)[number];
 
 /** Rechten die alleen doorgeeft wie ze zelf heeft. */
-export const GEVOELIG: Recht[] = ["accounts.view", "accounts.manage", "groups.view", "groups.manage", "audit.view", "toegang.beoordelen", "verwijderen.aanvragen", "verwijderen.beoordelen", "datavragen.view", "lagen.lezen"];
+export const GEVOELIG: Recht[] = ["accounts.view", "accounts.manage", "groups.view", "groups.manage", "audit.view", "toegang.beoordelen", "verwijderen.aanvragen", "verwijderen.beoordelen", "datavragen.view", "lagen.lezen", "platform.bedienen"];
 
 export interface Persoon {
   id: string;

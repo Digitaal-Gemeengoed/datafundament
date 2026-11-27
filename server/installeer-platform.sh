@@ -70,14 +70,10 @@ for wie in INGESTIE PORTAAL; do
     vul_aan "KLUIS_BAO_TOKEN_$wie" "$W"
   fi
 done
-vul_aan WEB_GEBRUIKER datafundament
-if ! grep -q '^WEB_WACHTWOORD=' "$ENV"; then
-  WW="$(geheim 12)"
-  HASH="$(docker run --rm caddy:2.10 caddy hash-password --plaintext "$WW")"
-  vul_aan WEB_WACHTWOORD "$WW"
-  # Tussen enkele aanhalingstekens: de hash bevat $-tekens.
-  vul_aan WEB_WACHTWOORD_HASH "'$HASH'"
-fi
+# De poort voor Dagster en de catalogus (DF-ADR-018); het oude gedeelde wachtwoord
+# van Caddy (WEB_*) is niet meer nodig.
+vul_aan POORT_COOKIE_GEHEIM "$(geheim 16)"
+sed -i '/^WEB_GEBRUIKER=/d; /^WEB_WACHTWOORD=/d; /^WEB_WACHTWOORD_HASH=/d' "$ENV"
 ok "Alle instellingen staan in .env (alleen leesbaar voor root)"
 
 # OpenMetadata tekent zijn tokens met een RSA-sleutel. Die in het image is openbaar;
@@ -93,6 +89,10 @@ if [ ! -f "$OMS/private_key.der" ]; then
   ok "Eigen RSA-sleutels voor OpenMetadata"
 fi
 chown -R 65532:65532 "$OMS"; chmod 700 "$OMS"; chmod 400 "$OMS"/*.der
+# De poort (DF-ADR-018): de lijst schrijft het portaal (uid 1000); tot dan mag niemand.
+install -d -m 755 -o 1000 -g 1000 "$DF_REPO/compose/poort"
+[ -f "$DF_REPO/compose/poort/toegestaan.txt" ] || install -m 644 -o 1000 -g 1000 /dev/null "$DF_REPO/compose/poort/toegestaan.txt"
+
 # Trino (DF-ADR-017): de regels schrijft het portaal (uid 1000, net als Trino); tot
 # dan mag niemand iets. Het wachtwoord van de dienstgebruiker openmetadata (bcrypt).
 TR="$DF_REPO/compose/trino"
@@ -135,7 +135,7 @@ fi
 meld "Images ophalen en de code bouwen (eerste keer: een paar minuten)"
 docker compose build -q werk portaal-migreer
 docker compose pull -q --ignore-buildable db garage lakekeeper lakekeeper-migratie trino caddy keycloak \
-  zoekindex openmetadata openmetadata-migratie
+  zoekindex openmetadata openmetadata-migratie poort
 ok "Klaar"
 
 meld "Database en opslag"
@@ -207,7 +207,7 @@ docker compose restart caddy trino >/dev/null
 ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
 
 # Keycloak: de eerste keer met de vraag om een gebruiker, daarna alleen de instellingen.
-if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ] || [ -z "$(waarde TRINO_OIDC_GEHEIM)" ]; then
+if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ] || [ -z "$(waarde TRINO_OIDC_GEHEIM)" ] || [ -z "$(waarde POORT_OIDC_GEHEIM)" ]; then
   "$DF_REPO/server/keycloak.sh"
 else
   "$DF_REPO/server/keycloak.sh" --stil
@@ -224,9 +224,8 @@ cat <<EOF
   Trino:        https://trino.$D/ui/   (inloggen via Keycloak)
                 JDBC: jdbc:trino://trino.$D:443?SSL=true&externalAuthentication=true
 
-  Gebruiker:    $(waarde WEB_GEBRUIKER)
-  Wachtwoord:   $(waarde WEB_WACHTWOORD)
-  (Bewaar het in je wachtwoordmanager. Opnieuw tonen: sudo grep WEB_WACHTWOORD= $DF_REPO/compose/.env)
+  Alles logt in via Keycloak. Dagster en de catalogus alleen met het recht
+  'Dagster en catalogus bedienen' (of superadmin) in het portaal.
 
   De ingestie van de bronnen draait elke 5 minuten (Dagster, schema ingestie_elke_5_minuten).
 

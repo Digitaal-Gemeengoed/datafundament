@@ -5,6 +5,7 @@ compose/openmetadata/
 # De regels en wachtwoorden voor Trino (portaal en installeer-platform.sh maken ze)
 compose/trino/regels/
 compose/trino/wachtwoorden/
+compose/poort/
 __pycache__/
 *.pyc
 .venv/
