@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from "react";
 import {
-  Checkbox, FormField, FormLabel, Heading1, Heading2, Paragraph, PrimaryActionButton, SecondaryActionButton, StatusBadge,
+  Checkbox, FormField, FormLabel, Heading1, Heading2, Paragraph, PrimaryActionButton, SecondaryActionButton, Select, SelectOption, StatusBadge,
   Table, TableBody, TableCell, TableHeader, TableHeaderCell, TableRow, Textarea, Textbox,
 } from "@utrecht/component-library-react";
 import { api, type Ik } from "../api";
@@ -10,8 +10,9 @@ import { foutTekst, MeldingVak, useLaden, type Melding } from "./gedeeld";
 interface Aanvraag {
   id: string; dataproduct: string; doel: string; grondslag: string; gewenst_tot: string | null; status: string;
   toelichting: string | null; met_persoonsgegevens: boolean; aangemaakt: string; beoordeeld: string | null; aanvrager: string; aanvrager_email: string;
-  beoordelaar: string | null; eigen: boolean; mag_beoordelen: boolean;
+  beoordelaar: string | null; eigen: boolean; mag_beoordelen: boolean; groep: string | null; groep_naam: string | null; groep_weg: boolean;
 }
+interface MijnGroep { id: string; naam: string; leden: number }
 const KLEUR: Record<string, "success" | "danger" | "warning" | "neutral"> = { toegekend: "success", afgewezen: "danger", ingetrokken: "neutral", aangevraagd: "warning" };
 
 /** Toegang tot een dataproduct aanvragen, beoordelen (vier ogen) en intrekken. */
@@ -31,7 +32,7 @@ export function Toegang({ ik }: { ik: Ik }) {
           <TableHeader>
             <TableRow>
               <TableHeaderCell>{t("dataproduct")}</TableHeaderCell>
-              <TableHeaderCell>{t("aanvrager")}</TableHeaderCell>
+              <TableHeaderCell>{t("voorWie")}</TableHeaderCell>
               <TableHeaderCell>{t("doel")}</TableHeaderCell>
               <TableHeaderCell>{t("status")}</TableHeaderCell>
               <TableHeaderCell><span className="ab-klein">{t("acties")}</span></TableHeaderCell>
@@ -41,7 +42,9 @@ export function Toegang({ ik }: { ik: Ik }) {
             {(lijst.data ?? []).map((a) => (
               <TableRow key={a.id}>
                 <TableCell><span className="ab-mono">{a.dataproduct}</span><div className="ab-klein">{tijd(a.aangemaakt)}{a.gewenst_tot ? ` · ${t("gewenstTot")}: ${a.gewenst_tot.slice(0, 10)}` : ""}</div></TableCell>
-                <TableCell>{a.aanvrager}<div className="ab-klein">{a.aanvrager_email}</div></TableCell>
+                <TableCell>
+                  {a.groep_naam ? <><strong>{a.groep_naam}</strong><div className="ab-klein">{a.groep_weg ? t("groepWeg") : `${t("aanvrager")}: ${a.aanvrager}`}</div></> : <>{a.aanvrager}<div className="ab-klein">{a.aanvrager_email}</div></>}
+                </TableCell>
                 <TableCell>{a.doel}<div className="ab-klein">{t("grondslag")}: {a.grondslag}</div></TableCell>
                 <TableCell>
                   <StatusBadge status={KLEUR[a.status] ?? "neutral"}>{t(`st_${a.status}` as never)}</StatusBadge>
@@ -61,14 +64,19 @@ export function Toegang({ ik }: { ik: Ik }) {
 }
 
 function Nieuw({ klaar }: { klaar: (m: Melding) => void }) {
-  const [v, zet] = useState({ dataproduct: new URLSearchParams(location.search).get("dataproduct") ?? "", doel: "", grondslag: "", gewenst_tot: "" });
+  const leeg = { dataproduct: "", doel: "", grondslag: "", gewenst_tot: "", groep: "" };
+  const [v, zet] = useState({ ...leeg, dataproduct: new URLSearchParams(location.search).get("dataproduct") ?? "" });
+  const groepen = useLaden(() => api<MijnGroep[]>("GET", "/api/toegang/groepen"));
   const [bezig, zetBezig] = useState(false);
   const stuur = async (e: FormEvent) => {
     e.preventDefault();
     zetBezig(true);
     try {
-      await api("POST", "/api/toegang", { dataproduct: v.dataproduct, doel: v.doel, grondslag: v.grondslag, ...(v.gewenst_tot ? { gewenst_tot: v.gewenst_tot } : {}) });
-      zet({ dataproduct: "", doel: "", grondslag: "", gewenst_tot: "" });
+      await api("POST", "/api/toegang", {
+        dataproduct: v.dataproduct, doel: v.doel, grondslag: v.grondslag,
+        ...(v.gewenst_tot ? { gewenst_tot: v.gewenst_tot } : {}), ...(v.groep ? { groep: v.groep } : {}),
+      });
+      zet(leeg);
       klaar({ soort: "ok", tekst: t("st_aangevraagd") });
     } catch (x) {
       klaar({ soort: "fout", tekst: foutTekst(x) });
@@ -82,6 +90,14 @@ function Nieuw({ klaar }: { klaar: (m: Melding) => void }) {
       <FormField label={<FormLabel htmlFor="t-dp">{t("dataproduct")}</FormLabel>} description="dataproduct/… of dwh/dataproduct/…">
         <Textbox id="t-dp" value={v.dataproduct} required maxLength={200} pattern="^[a-z0-9_]+(/[a-z0-9_]+){1,3}$" onChange={(e) => zet({ ...v, dataproduct: e.target.value })} />
       </FormField>
+      {!!groepen.data?.length && (
+        <FormField label={<FormLabel htmlFor="t-wie">{t("voorWie")}</FormLabel>} description={t("voorWieUitleg")}>
+          <Select id="t-wie" value={v.groep} onChange={(e) => zet({ ...v, groep: e.target.value })}>
+            <SelectOption value="">{t("voorMijzelf")}</SelectOption>
+            {groepen.data.map((g) => <SelectOption key={g.id} value={g.id}>{g.naam} ({g.leden} {t("groepLeden")})</SelectOption>)}
+          </Select>
+        </FormField>
+      )}
       <FormField label={<FormLabel htmlFor="t-doel">{t("doel")}</FormLabel>} description={t("doelUitleg")}>
         <Textarea id="t-doel" value={v.doel} rows={2} required minLength={10} maxLength={2000} onChange={(e) => zet({ ...v, doel: e.target.value })} />
       </FormField>
@@ -101,7 +117,11 @@ function Acties({ a, beoordelaar, klaar }: { a: Aanvraag; beoordelaar: boolean; 
   const [toel, zetToel] = useState("");
   const [met, zetMet] = useState(false);
   const kanIntrekken = (a.eigen && a.status === "aangevraagd") || (beoordelaar && !a.eigen && a.status === "toegekend");
-  if (!a.mag_beoordelen && !kanIntrekken) return <>{a.eigen && a.status === "aangevraagd" ? <span className="ab-klein">{t("vierOgen")}</span> : "—"}</>;
+  if (!a.mag_beoordelen && !kanIntrekken) {
+    if (a.status !== "aangevraagd") return <>—</>;
+    if (a.eigen) return <span className="ab-klein">{t("vierOgen")}</span>;
+    return beoordelaar && a.groep ? <span className="ab-klein">{t("vierOgenGroep")}</span> : <>—</>;
+  }
   const doe = async () => {
     try {
       if (open === "intrekken") await api("POST", `/api/toegang/${a.id}/intrekken`, { toelichting: toel });

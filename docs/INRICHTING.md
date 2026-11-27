@@ -110,7 +110,7 @@ Het script vraagt één keer het wachtwoord van `dlt_lezer` (op dfw: `sudo ./bro
 
 - haalt het de images op (vastgepinde versies) en bouwt de code;
 - start PostgreSQL met PostGIS en Garage, en zet in Garage een eigen sleutel per onderdeel (Lakekeeper en de schrijvers lezen en schrijven, Trino leest alleen);
-- richt Lakekeeper in, met het warehouse `datafundament` op Garage. Lakekeeper logt in via Keycloak en houdt de rechten bij in OpenFGA: dlt en dbt mogen schrijven, Trino alleen lezen (DF-ADR-019);
+- richt Lakekeeper in, met het warehouse `datafundament` op Garage. Lakekeeper logt in via Keycloak en houdt de rechten bij in OpenFGA: dlt en dbt mogen schrijven, Trino alleen lezen (DF-ADR-019). Wie in het portaal het recht 'Dagster en catalogus bedienen' heeft, ziet er de metadata; een superadmin beheert het project (DF-ADR-020);
 - start Trino, Dagster en Caddy.
 
 Aan het eind toont het de adressen en het wachtwoord voor de websites. Opnieuw draaien kan altijd; geheimen en data blijven staan.

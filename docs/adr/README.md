@@ -38,3 +38,4 @@ Een besluit wordt niet herschreven. Verandert het, dan komt er een nieuw ADR, en
 | [017](DF-ADR-017-trino-via-keycloak-met-kolomrechten.md) | Trino via Keycloak, met rechten per kolom uit het portaal | aanvaard |
 | [018](DF-ADR-018-poort-voor-dagster-en-catalogus.md) | Een poort via Keycloak voor Dagster en de catalogus | aanvaard |
 | [019](DF-ADR-019-lakekeeper-via-keycloak-met-openfga.md) | Lakekeeper via Keycloak, met rechten in OpenFGA | aanvaard |
+| [020](DF-ADR-020-groepstoegang-en-rechten-in-lakekeeper.md) | Toegang tot data voor een groep, en rechten in Lakekeeper uit het portaal | aanvaard |

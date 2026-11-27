@@ -51,8 +51,13 @@ export async function groepRoutes(app: FastifyInstance): Promise<void> {
     const p = req.persoon!;
     if (!["groups.view", "groups.manage", "accounts.manage"].some((r) => p.rechten.has(r as Recht))) vereis(req, "groups.view");
     const r = await d.pool.query(
-      `SELECT g.id, g.naam, g.omschrijving, g.rechten, g.niveau, g.superadmin, count(l.account)::int AS leden
+      `SELECT g.id, g.naam, g.omschrijving, g.rechten, g.niveau, g.superadmin, count(l.account)::int AS leden,
+              -- Toegang tot data die bij de groep hoort (DF-ADR-020): wie lid wordt, krijgt die ook.
+              coalesce((SELECT array_agg(t.dataproduct || CASE WHEN t.met_persoonsgegevens THEN ' (met persoonsgegevens)' ELSE '' END ORDER BY t.dataproduct)
+                          FROM toegangsaanvragen t WHERE t.groep = g.id AND t.status = 'toegekend'
+                           AND (t.gewenst_tot IS NULL OR t.gewenst_tot >= $1::date)), '{}') AS dataproducten
          FROM groepen g LEFT JOIN lidmaatschappen l ON l.groep = g.id GROUP BY g.id ORDER BY g.niveau DESC, g.naam`,
+      [d.nu()],
     );
     return r.rows.map((g) => ({ ...g, toewijsbaar: p.rechten.has("accounts.manage") && magGroepGeven(p, g) === null }));
   });
