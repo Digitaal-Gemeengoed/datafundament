@@ -134,14 +134,16 @@ test("toegang: aanvragen, nooit je eigen aanvraag beoordelen, regels voor Trino"
   // De aanvrager heeft het recht niet; en een beoordelaar die zelf aanvraagt, mag zijn eigen aanvraag niet beoordelen.
   assert.equal((await vraag(app, eng, "POST", `/api/toegang/${aanvraag}/beoordeling`, { besluit: "toegekend", toelichting: "prima" })).statusCode, 403);
   const priv = await sessie(id.priv);
-  assert.equal((await vraag(app, priv, "POST", `/api/toegang/${aanvraag}/beoordeling`, { besluit: "toegekend", toelichting: "Doel past bij de grondslag" })).statusCode, 200);
+  const b = await vraag(app, priv, "POST", `/api/toegang/${aanvraag}/beoordeling`, { besluit: "toegekend", toelichting: "Doel past bij de grondslag", met_persoonsgegevens: true });
+  assert.equal(b.statusCode, 200, b.body);
   assert.equal((await vraag(app, priv, "POST", `/api/toegang/${aanvraag}/beoordeling`, { besluit: "afgewezen", toelichting: "toch niet" })).statusCode, 409);
+  await assert.rejects(eigenaar.query("UPDATE beheer.toegangsaanvragen SET met_persoonsgegevens = false"), /ligt vast/);
   const regels = (await vraag(app, priv, "GET", "/api/toegang/regels")).json();
-  assert.deepEqual(regels.tables[0], { user: "eng@test\\.nl", catalog: "lakehouse", schema: "dataproduct", table: "testpersonen_per_buurt", privileges: ["SELECT"] });
+  assert.deepEqual(regels.tables[2], { user: "^(eng@test\\.nl)$", catalog: "lakehouse", schema: "dataproduct", table: "testpersonen_per_buurt", privileges: ["SELECT"] });
   // De eigen lijst van de aanvrager; intrekken door een beoordelaar.
   assert.equal((await vraag(app, eng, "GET", "/api/toegang")).json()[0].status, "toegekend");
   assert.equal((await vraag(app, priv, "POST", `/api/toegang/${aanvraag}/intrekken`, { toelichting: "Project afgerond" })).statusCode, 200);
-  assert.equal((await vraag(app, priv, "GET", "/api/toegang/regels")).json().tables.length, 1);
+  assert.equal((await vraag(app, priv, "GET", "/api/toegang/regels")).json().tables.length, 3); // systeem, diensten, de rest niets
   // De database bewaart alles: verwijderen kan niet, ook niet als eigenaar.
   await assert.rejects(eigenaar.query("DELETE FROM beheer.toegangsaanvragen"), /nooit verwijderd/);
 });

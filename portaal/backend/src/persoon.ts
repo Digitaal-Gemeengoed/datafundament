@@ -9,11 +9,14 @@ export const RECHTEN = [
   "verwijderen.aanvragen", "verwijderen.beoordelen",
   // Elke datavraag (migratie 004).
   "datavragen.view",
+  // Lezen in alle lagen via Trino, voor data-engineers (migratie 005). Komt niet
+  // mee met superadmin: beheer van het portaal is geen toegang tot data.
+  "lagen.lezen",
 ] as const;
 export type Recht = (typeof RECHTEN)[number];
 
 /** Rechten die alleen doorgeeft wie ze zelf heeft. */
-export const GEVOELIG: Recht[] = ["accounts.view", "accounts.manage", "groups.view", "groups.manage", "audit.view", "toegang.beoordelen", "verwijderen.aanvragen", "verwijderen.beoordelen", "datavragen.view"];
+export const GEVOELIG: Recht[] = ["accounts.view", "accounts.manage", "groups.view", "groups.manage", "audit.view", "toegang.beoordelen", "verwijderen.aanvragen", "verwijderen.beoordelen", "datavragen.view", "lagen.lezen"];
 
 export interface Persoon {
   id: string;

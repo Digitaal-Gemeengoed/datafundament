@@ -2,6 +2,9 @@
 .env
 # De RSA-sleutels van OpenMetadata (installeer-platform.sh maakt ze)
 compose/openmetadata/
+# De regels en wachtwoorden voor Trino (portaal en installeer-platform.sh maken ze)
+compose/trino/regels/
+compose/trino/wachtwoorden/
 __pycache__/
 *.pyc
 .venv/

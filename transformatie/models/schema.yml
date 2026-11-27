@@ -5,15 +5,22 @@ version: 2
 models:
   - name: persoon
     description: De actuele stand van elke persoon, met leesbare waarden.
+    # Kolommen met meta.privacy (persoonsgegeven of bijzonder) zijn in een dataproduct
+    # gemaskeerd, tenzij de toekenning 'met persoonsgegevens' is (DF-ADR-017).
+    # Neemt een dataproduct zo'n kolom over, label hem dan daar ook.
     columns:
       - name: pl_id
         tests: [unique, not_null]
+        config: {meta: {privacy: persoonsgegeven}}
       # Testdata kan hier afwijken; een waarschuwing, geen fout.
       - name: pseudoniem
         description: Pseudoniem uit de kluis (DF-ADR-015); leeg als er geen BSN is.
+        config: {meta: {privacy: persoonsgegeven}}
         tests:
           - unique: {config: {severity: warn}}
           - not_null: {config: {severity: warn}}
+      - name: geboortedatum
+        config: {meta: {privacy: persoonsgegeven}}
       - name: geslacht_code
         tests:
           - accepted_values:

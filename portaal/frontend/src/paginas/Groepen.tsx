@@ -9,9 +9,9 @@ import { foutTekst, MeldingVak, RedenVeld, useLaden, type Melding } from "./gede
 
 const RECHTEN = [
   "accounts.view", "accounts.manage", "groups.view", "groups.manage", "audit.view", "settings.view", "settings.manage",
-  "platform.view", "dataproducten.view", "toegang.aanvragen", "toegang.beoordelen", "verwijderen.aanvragen", "verwijderen.beoordelen", "datavragen.view",
+  "platform.view", "dataproducten.view", "toegang.aanvragen", "toegang.beoordelen", "verwijderen.aanvragen", "verwijderen.beoordelen", "datavragen.view", "lagen.lezen",
 ];
-const WAT: Record<string, string> = { view: "rechtBekijken", manage: "rechtBeheren", aanvragen: "rechtAanvragen", beoordelen: "rechtBeoordelen" };
+const WAT: Record<string, string> = { view: "rechtBekijken", manage: "rechtBeheren", aanvragen: "rechtAanvragen", beoordelen: "rechtBeoordelen", lezen: "rechtLezen" };
 
 /** Leesbare naam van een recht: onderdeel en wat je mag. */
 function rechtNaam(r: string): string {

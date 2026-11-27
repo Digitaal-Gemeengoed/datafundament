@@ -52,6 +52,11 @@ export interface Config {
     kluis: { adres: string; token: string } | null;
   };
   /**
+   * Waar het portaal de regels voor Trino schrijft (DF-ADR-017), en waar het
+   * manifest van dbt staat (welke kolommen gevoelig zijn). Null: geen regels.
+   */
+  trinoRegels: { pad: string; manifest: string } | null;
+  /**
    * Het token waarmee Trino zijn gebeurtenissen aflevert op de interne poort
    * (DF-ADR-016). Zonder token luistert de ontvanger niet.
    */
@@ -101,6 +106,9 @@ export function leesConfig(env: NodeJS.ProcessEnv = process.env): Config {
         ? { adres: env.KLUIS_BAO_ADRES.replace(/\/$/, ""), token: geheim(env, "KLUIS_BAO_TOKEN", 20) }
         : null,
     },
+    trinoRegels: env.TRINO_REGELS_PAD
+      ? { pad: env.TRINO_REGELS_PAD, manifest: env.DBT_MANIFEST ?? "/var/lib/dbt/laatste/manifest.json" }
+      : null,
     datavragen: env.DATAVRAGEN_TOKEN
       ? { token: geheim(env, "DATAVRAGEN_TOKEN", 32), poort: Number(env.DATAVRAGEN_POORT ?? 4301) }
       : null,

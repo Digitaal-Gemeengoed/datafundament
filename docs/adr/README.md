@@ -35,3 +35,4 @@ Een besluit wordt niet herschreven. Verandert het, dan komt er een nieuw ADR, en
 | [014](DF-ADR-014-simulatie-en-drie-ingestiepatronen.md) | Een gesimuleerd jaar, en drie manieren waarop data binnenkomt | aanvaard |
 | [015](DF-ADR-015-pseudonimisering-en-verwijderen.md) | Pseudoniemen bij de poort, een sleutelkluis, en verwijderen met crypto-shredding | aanvaard |
 | [016](DF-ADR-016-elke-datavraag-vastleggen.md) | Elke datavraag vastleggen, door Trino zelf | aanvaard |
+| [017](DF-ADR-017-trino-via-keycloak-met-kolomrechten.md) | Trino via Keycloak, met rechten per kolom uit het portaal | aanvaard |
