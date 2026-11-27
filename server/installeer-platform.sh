@@ -26,7 +26,7 @@ umask 077; touch "$ENV"; umask 022; chmod 600 "$ENV"
 vul_aan DOMEIN datafundament.haarlem.dev
 for n in DB_WACHTWOORD LK_DB_WACHTWOORD DAGSTER_DB_WACHTWOORD DWH_SCHRIJVER_WACHTWOORD DWH_LEZER_WACHTWOORD \
          KC_DB_WACHTWOORD KC_BEHEERDER_WACHTWOORD PORTAAL_DB_WACHTWOORD PORTAAL_APP_WACHTWOORD KLUIS_DB_WACHTWOORD \
-         OM_DB_WACHTWOORD TRINO_OM_WACHTWOORD; do
+         OM_DB_WACHTWOORD TRINO_OM_WACHTWOORD OPENFGA_DB_WACHTWOORD; do
   vul_aan "$n" "$(geheim 24)"
 done
 vul_aan LK_SLEUTEL "$(geheim 32)"
@@ -39,6 +39,8 @@ vul_aan OM_FERNET_SLEUTEL "$(openssl rand -base64 32 | tr '+/' '-_')"
 vul_aan OM_JWT_SLEUTEL_ID "$(geheim 16)"
 # Trino (DF-ADR-017): de sleutel tussen de onderdelen van Trino.
 vul_aan TRINO_INTERN_GEHEIM "$(geheim 32)"
+# OpenFGA (DF-ADR-019): de sleutel waarmee Lakekeeper zich meldt.
+vul_aan OPENFGA_SLEUTEL "$(geheim 32)"
 for k in BEHEER LAKEKEEPER SCHRIJVER LEZER LANDING; do
   vul_aan "GARAGE_${k}_SLEUTEL" "GK$(geheim 12)"
   vul_aan "GARAGE_${k}_GEHEIM" "$(geheim 32)"
@@ -135,7 +137,7 @@ fi
 meld "Images ophalen en de code bouwen (eerste keer: een paar minuten)"
 docker compose build -q werk portaal-migreer
 docker compose pull -q --ignore-buildable db garage lakekeeper lakekeeper-migratie trino caddy keycloak \
-  zoekindex openmetadata openmetadata-migratie poort
+  zoekindex openmetadata openmetadata-migratie poort openfga
 ok "Klaar"
 
 meld "Database en opslag"
@@ -164,8 +166,9 @@ rol df_portaal_app "$(waarde PORTAAL_APP_WACHTWOORD)"
 psql_beheer -c "GRANT CONNECT ON DATABASE df_portaal TO df_portaal, df_portaal_app"
 rol kluis "$(waarde KLUIS_DB_WACHTWOORD)";          database kluis kluis
 rol openmetadata "$(waarde OM_DB_WACHTWOORD)";       database openmetadata openmetadata
+rol openfga "$(waarde OPENFGA_DB_WACHTWOORD)";         database openfga openfga
 psql_beheer -c "ALTER ROLE openmetadata SET work_mem = '10MB'"
-ok "Databases voor Keycloak, het portaal, de kluis en OpenMetadata"
+ok "Databases voor Keycloak, het portaal, de kluis, OpenMetadata en OpenFGA"
 
 garage() { docker compose exec -T garage /garage "$@"; }
 # Een eigen sleutel per onderdeel (DF-ADR-002): Lakekeeper en de schrijvers lezen
@@ -192,36 +195,64 @@ garage bucket info landing >/dev/null 2>&1 || garage bucket create landing >/dev
 sleutel landing landing --write
 sleutel schrijver landing --read
 
-meld "Iceberg-catalogus (Lakekeeper)"
-docker compose up -d lakekeeper
-docker compose run --rm --no-deps -T \
-  -e GARAGE_LAKEKEEPER_SLEUTEL="$(waarde GARAGE_LAKEKEEPER_SLEUTEL)" \
-  -e GARAGE_LAKEKEEPER_GEHEIM="$(waarde GARAGE_LAKEKEEPER_GEHEIM)" \
-  werk python -m beheer.inrichten
-
-meld "De rest: Trino, Dagster, Keycloak, portaal, OpenMetadata, Caddy"
+meld "Alles starten: Lakekeeper, OpenFGA, Trino, Dagster, Keycloak, portaal, OpenMetadata, Caddy"
 docker compose up -d --remove-orphans
 # Caddy en Trino krijgen losse configuratiebestanden. Na een git pull is dat een nieuw
 # bestand, dat een draaiende container niet ziet: herstarten, dan lezen ze het opnieuw.
 # Keycloak houdt het inlogthema (keycloak-thema/) in het geheugen: ook herstarten.
 docker compose restart caddy keycloak >/dev/null
-# OpenMetadata richt het inloggen één keer in, bij het starten, en haalt dan de
-# gegevens van Keycloak op via https://id.<domein>. Lukt dat niet (Caddy herstart
-# net, of heeft nog geen certificaat), dan blijft SSO uit tot de volgende start.
-# Dus: wachten tot Keycloak via Caddy antwoordt, dan OpenMetadata herstarten.
-for _ in $(seq 1 60); do
-  curl -sf -o /dev/null --max-time 5 "https://id.$(waarde DOMEIN)/realms/datafundament/.well-known/openid-configuration" && break
-  sleep 3
-done
-docker compose restart trino openmetadata poort >/dev/null
-ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
+wacht_op_keycloak() {
+  for _ in $(seq 1 60); do
+    curl -sf -o /dev/null --max-time 5 "https://id.$(waarde DOMEIN)/realms/datafundament/.well-known/openid-configuration" && return 0
+    sleep 3
+  done
+  waarschuw "Keycloak antwoordt niet via https://id.$(waarde DOMEIN); inloggen kan haperen."
+}
+wacht_op_keycloak
 
 # Keycloak: de eerste keer met de vraag om een gebruiker, daarna alleen de instellingen.
-if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ] || [ -z "$(waarde TRINO_OIDC_GEHEIM)" ] || [ -z "$(waarde POORT_OIDC_GEHEIM)" ]; then
+# Zet ook de clients en geheimen voor Lakekeeper (DF-ADR-019) en start wat ze nodig heeft opnieuw.
+if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ] || [ -z "$(waarde TRINO_OIDC_GEHEIM)" ] \
+   || [ -z "$(waarde POORT_OIDC_GEHEIM)" ] || [ -z "$(waarde LK_WERK_GEHEIM)" ]; then
   "$DF_REPO/server/keycloak.sh"
 else
   "$DF_REPO/server/keycloak.sh" --stil
 fi
+
+meld "Iceberg-catalogus (Lakekeeper): inloggen via Keycloak, rechten in OpenFGA"
+# Lakekeeper haalt de sleutels van Keycloak bij het starten. De structuur van wat er al
+# in de catalogus staat (warehouse, namespaces, tabellen) zet reconcile in OpenFGA;
+# dat is aanvullend en mag vaker.
+docker compose restart lakekeeper >/dev/null
+docker compose run --rm --no-deps -T lakekeeper-migratie openfga reconcile --mode add-missing >/dev/null \
+  && ok "Rechtenstructuur in OpenFGA bijgewerkt" || waarschuw "openfga reconcile lukte niet; zie: docker compose logs lakekeeper"
+lk_inrichten() {
+  docker compose run --rm --no-deps -T \
+    -e GARAGE_LAKEKEEPER_SLEUTEL="$(waarde GARAGE_LAKEKEEPER_SLEUTEL)" \
+    -e GARAGE_LAKEKEEPER_GEHEIM="$(waarde GARAGE_LAKEKEEPER_GEHEIM)" \
+    -e LK_BEHEER_GEHEIM="$(waarde LK_BEHEER_GEHEIM)" \
+    -e LK_TRINO_GEHEIM="$(waarde LK_TRINO_GEHEIM)" \
+    -e LK_BEHEERDER_SUB="$(waarde LK_BEHEERDER_SUB)" \
+    -e LK_BEHEERDER_EMAIL="$(waarde OM_BEHEERDER)@$(waarde OM_DOMEIN)" \
+    werk python -m beheer.inrichten
+}
+set +e
+lk_inrichten; uitkomst=$?
+set -e
+if [ "$uitkomst" = 3 ]; then
+  # Al ingericht zonder rechten (de overstap van allowall naar OpenFGA): de bootstrap
+  # opnieuw openzetten, zodat het beheeraccount beheerder wordt. Data blijft.
+  docker compose run --rm --no-deps -T lakekeeper-migratie reopen-bootstrap --yes >/dev/null
+  ok "Bootstrap van Lakekeeper opnieuw geopend (overstap naar OpenFGA)"
+  lk_inrichten || stop "Lakekeeper inrichten lukte niet."
+elif [ "$uitkomst" != 0 ]; then
+  stop "Lakekeeper inrichten lukte niet."
+fi
+
+# OpenMetadata, Trino en de poort raadplegen Keycloak (en Trino ook Lakekeeper) bij het starten.
+wacht_op_keycloak
+docker compose restart trino openmetadata poort werk dagster-daemon dagster-webserver >/dev/null
+ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
 
 D="$(waarde DOMEIN)"
 cat <<EOF

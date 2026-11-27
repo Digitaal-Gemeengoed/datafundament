@@ -3,7 +3,8 @@
 #   Garage (S3)         objectopslag, een eigen sleutel per onderdeel (DF-ADR-002);
 #                       de bucket 'landing' is via WireGuard bereikbaar voor dfw (DF-ADR-014)
 #   db                  PostgreSQL met PostGIS: Lakekeeper, Dagster en het datawarehouse (dwh)
-#   Lakekeeper          Iceberg REST-catalogus (DF-ADR-003)
+#   Lakekeeper          Iceberg REST-catalogus (DF-ADR-003); inloggen via Keycloak, rechten
+#                       per onderdeel in OpenFGA (DF-ADR-019)
 #   Trino               de enige voordeur voor afnemers (DF-ADR-008)
 #   werk                de code: ingestie (dlt) en transformatie (dbt); code server voor Dagster
 #   Dagster             webserver en daemon: de regisseur
@@ -45,6 +46,12 @@ x-werk-omgeving: &werk-omgeving
   PYICEBERG_CATALOG__DEFAULT__TYPE: rest
   PYICEBERG_CATALOG__DEFAULT__URI: http://lakekeeper:8181/catalog
   PYICEBERG_CATALOG__DEFAULT__WAREHOUSE: datafundament
+  # Lakekeeper vraagt een token van Keycloak (DF-ADR-019): service-account df-lk-werk.
+  PYICEBERG_CATALOG__DEFAULT__CREDENTIAL: df-lk-werk:${LK_WERK_GEHEIM:-nog-niet-gezet}
+  PYICEBERG_CATALOG__DEFAULT__OAUTH2_SERVER_URI: https://id.${DOMEIN}/realms/datafundament/protocol/openid-connect/token
+  PYICEBERG_CATALOG__DEFAULT__SCOPE: lakekeeper
+  # Hetzelfde voor DuckDB (dbt, onderhoud, verwijderen): transformatie/profiles.yml, beheer/lakehouse.py.
+  LK_WERK_GEHEIM: ${LK_WERK_GEHEIM:-nog-niet-gezet}
   PYICEBERG_CATALOG__DEFAULT__S3__ENDPOINT: http://garage:3900
   PYICEBERG_CATALOG__DEFAULT__S3__ACCESS_KEY_ID: ${GARAGE_SCHRIJVER_SLEUTEL}
   PYICEBERG_CATALOG__DEFAULT__S3__SECRET_ACCESS_KEY: ${GARAGE_SCHRIJVER_GEHEIM}
@@ -161,15 +168,54 @@ services:
   lakekeeper-migratie:
     image: &lakekeeper vakamo/lakekeeper@sha256:e5a0e9d3ffecf0c09b2c0bcd2258e9adc2274bf88c1127b2ca08ea02966b5f48
     command: ["migrate"]
+    restart: "no"
     environment: &lakekeeper-omgeving
       LAKEKEEPER__PG_DATABASE_URL_READ: postgresql://lakekeeper:${LK_DB_WACHTWOORD}@db:5432/lakekeeper
       LAKEKEEPER__PG_DATABASE_URL_WRITE: postgresql://lakekeeper:${LK_DB_WACHTWOORD}@db:5432/lakekeeper
       LAKEKEEPER__PG_ENCRYPTION_KEY: ${LK_SLEUTEL:?}
-      # Nog zonder inlog; alleen bereikbaar binnen dit netwerk en via Caddy met wachtwoord.
-      # Keycloak en rechten per gebruiker volgen (DF-ADR-012).
-      LAKEKEEPER__AUTHZ_BACKEND: allowall
+      # Inloggen via Keycloak; alleen tokens met audience 'lakekeeper' (DF-ADR-019).
+      LAKEKEEPER__OPENID_PROVIDER_URI: https://id.${DOMEIN:?}/realms/datafundament
+      LAKEKEEPER__OPENID_AUDIENCE: lakekeeper
+      LAKEKEEPER__UI__OPENID_CLIENT_ID: lakekeeper
+      LAKEKEEPER__UI__LAKEKEEPER_URL: https://catalogus.${DOMEIN:?}
+      LAKEKEEPER__UI__ENABLE_SURVEYS: "false"
+      # Rechten in OpenFGA: wie mag wat met welk warehouse, welke namespace, welke tabel.
+      LAKEKEEPER__AUTHZ_BACKEND: openfga
+      LAKEKEEPER__OPENFGA__ENDPOINT: http://openfga:8081
+      LAKEKEEPER__OPENFGA__API_KEY: ${OPENFGA_SLEUTEL:?}
     depends_on:
       db: { condition: service_healthy }
+      openfga: { condition: service_healthy }
+
+  # De rechten van Lakekeeper (DF-ADR-019). Alleen binnen het netwerk; Lakekeeper
+  # meldt zich met een gedeelde sleutel. De gegevens staan in de database openfga.
+  openfga-migratie:
+    image: &openfga openfga/openfga:v1.14.2
+    command: ["migrate"]
+    restart: "no"
+    environment: &openfga-omgeving
+      OPENFGA_DATASTORE_ENGINE: postgres
+      OPENFGA_DATASTORE_URI: postgres://openfga:${OPENFGA_DB_WACHTWOORD:?}@db:5432/openfga?sslmode=disable
+    depends_on:
+      db: { condition: service_healthy }
+
+  openfga:
+    image: *openfga
+    restart: unless-stopped
+    command: ["run"]
+    environment:
+      <<: *openfga-omgeving
+      OPENFGA_AUTHN_METHOD: preshared
+      OPENFGA_AUTHN_PRESHARED_KEYS: ${OPENFGA_SLEUTEL:?}
+      OPENFGA_PLAYGROUND_ENABLED: "false"
+      OPENFGA_HTTP_TLS_ENABLED: "false"
+      OPENFGA_LOG_FORMAT: json
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/grpc_health_probe", "-addr=openfga:8081"]
+      interval: 5s
+      retries: 20
+    depends_on:
+      openfga-migratie: { condition: service_completed_successfully }
 
   lakekeeper:
     image: *lakekeeper
@@ -192,6 +238,8 @@ services:
       DATAVRAGEN_TOKEN: ${DATAVRAGEN_TOKEN:?}
       # Inloggen via Keycloak en de interne sleutel (DF-ADR-017).
       DOMEIN: ${DOMEIN:?}
+      # Trino leest de catalogus als service-account df-lk-trino: alleen lezen (DF-ADR-019).
+      LK_TRINO_GEHEIM: ${LK_TRINO_GEHEIM:-nog-niet-gezet}
       TRINO_OIDC_GEHEIM: ${TRINO_OIDC_GEHEIM:-nog-niet-gezet}
       TRINO_INTERN_GEHEIM: ${TRINO_INTERN_GEHEIM:?}
     volumes:

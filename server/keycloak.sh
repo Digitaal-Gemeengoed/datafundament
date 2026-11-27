@@ -15,6 +15,9 @@
 #   - een vertrouwelijke client 'df-poort' voor de poort voor Dagster en de catalogus
 #     (oauth2-proxy, DF-ADR-018);
 #   - herstelcodes naast de authenticator-app (zoals bij de Office Assistent);
+#   - Lakekeeper (DF-ADR-019): de scope 'lakekeeper' (audience), de client 'lakekeeper'
+#     voor de web-UI, en een service-account per onderdeel: df-lk-werk (dlt, dbt,
+#     onderhoud), df-lk-trino (alleen lezen) en df-lk-beheer (inrichten);
 #   - een vertrouwelijke client 'df-trino' voor Trino, met df-trino als audience
 #     in het access token (DF-ADR-017);
 #   - de AMR-mapper, zodat het id_token meldt dat er een tweede factor was;
@@ -192,6 +195,62 @@ if ! kc get "clients/$PID/protocol-mappers/models" -r $R | jq -e '.[] | select(.
   ok "Audience-mapper voor de poort toegevoegd"
 fi
 
+# --- Lakekeeper (DF-ADR-019) ------------------------------------------------------------------
+# Een scope 'lakekeeper' die de audience 'lakekeeper' in het token zet; Lakekeeper neemt
+# alleen zulke tokens aan.
+LKS="$(kc get client-scopes -r $R --fields id,name | jq -r '.[] | select(.name=="lakekeeper") | .id')"
+if [ -z "$LKS" ]; then
+  kc create client-scopes -r $R -s name=lakekeeper -s protocol=openid-connect \
+    -s 'attributes."include.in.token.scope"=true' -s 'attributes."display.on.consent.screen"=false' >/dev/null
+  LKS="$(kc get client-scopes -r $R --fields id,name | jq -r '.[] | select(.name=="lakekeeper") | .id')"
+  kc create "client-scopes/$LKS/protocol-mappers/models" -r $R \
+    -s name=audience-lakekeeper -s protocol=openid-connect -s protocolMapper=oidc-audience-mapper \
+    -s 'config."included.client.audience"=lakekeeper' -s 'config."access.token.claim"=true' \
+    -s 'config."id.token.claim"=false' -s 'config."introspection.token.claim"=true' >/dev/null
+  ok "Scope lakekeeper aangemaakt"
+fi
+# De web-UI van Lakekeeper: openbare client met PKCE.
+CAT="https://catalogus.$DOMEIN"
+LKUI="$(kc get clients -r $R -q clientId=lakekeeper --fields id 2>/dev/null | jq -r '.[0].id // empty')"
+if [ -z "$LKUI" ]; then
+  kc create clients -r $R -s clientId=lakekeeper -s name="Lakekeeper (web-UI)" -s enabled=true \
+    -s protocol=openid-connect -s publicClient=true -s standardFlowEnabled=true -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
+    -s "redirectUris=[\"$CAT/ui/*\"]" -s "webOrigins=[\"$CAT\"]" -s "rootUrl=$CAT" \
+    -s "attributes.\"post.logout.redirect.uris\"=$CAT/ui/*" -s 'attributes."pkce.code.challenge.method"=S256' >/dev/null
+  LKUI="$(kc get clients -r $R -q clientId=lakekeeper --fields id | jq -r '.[0].id')"
+  ok "Client lakekeeper (web-UI) aangemaakt"
+else
+  kc update "clients/$LKUI" -r $R -s "redirectUris=[\"$CAT/ui/*\"]" -s "webOrigins=[\"$CAT\"]" -s "rootUrl=$CAT" >/dev/null
+fi
+kc update "clients/$LKUI/default-client-scopes/$LKS" -r $R >/dev/null 2>&1 || true
+# Een service-account per onderdeel. Tokens een uur geldig: lange runs halen er
+# anders midden in een nieuwe.
+lk_dienst() {  # CLIENTID NAAM ENV-NAAM
+  local id
+  id="$(kc get clients -r $R -q clientId="$1" --fields id 2>/dev/null | jq -r '.[0].id // empty')"
+  if [ -z "$id" ]; then
+    kc create clients -r $R -s clientId="$1" -s name="$2" -s enabled=true -s protocol=openid-connect \
+      -s publicClient=false -s clientAuthenticatorType=client-secret -s secret="$(geheim 32)" \
+      -s standardFlowEnabled=false -s implicitFlowEnabled=false -s directAccessGrantsEnabled=false \
+      -s serviceAccountsEnabled=true -s 'attributes."access.token.lifespan"=3600' >/dev/null
+    id="$(kc get clients -r $R -q clientId="$1" --fields id | jq -r '.[0].id')"
+    ok "Service-account $1 aangemaakt"
+  fi
+  kc update "clients/$id/default-client-scopes/$LKS" -r $R >/dev/null 2>&1 || true
+  zet "$3" "$(kc get "clients/$id/client-secret" -r $R | jq -r .value)"
+}
+lk_dienst df-lk-werk "Lakekeeper: dlt, dbt en onderhoud (schrijven)" LK_WERK_GEHEIM
+lk_dienst df-lk-trino "Lakekeeper: Trino (alleen lezen)" LK_TRINO_GEHEIM
+lk_dienst df-lk-beheer "Lakekeeper: inrichten (beheer)" LK_BEHEER_GEHEIM
+# De eerste beheerder ook in Lakekeeper: zijn id in Keycloak is daar zijn subject.
+BEH="$(waarde OM_BEHEERDER)"; BEHD="$(waarde OM_DOMEIN)"
+if [ -n "$BEH" ] && [ -n "$BEHD" ]; then
+  SUB="$(kc get users -r $R -q email="$BEH@$BEHD" -q exact=true --fields id | jq -r '.[0].id // empty')"
+  [ -n "$SUB" ] && zet LK_BEHEERDER_SUB "$SUB"
+fi
+ok "Lakekeeper: scope, web-UI en service-accounts staan klaar"
+
 # --- Herstelcodes (zoals bij de Office Assistent) --------------------------------------------
 # Na het koppelen van de app maakt iedereen twaalf herstelcodes aan; bij het inloggen
 # kan een code in plaats van de app ("Op een andere manier inloggen"). Elke code werkt
@@ -344,5 +403,5 @@ zet PORTAAL_OIDC_GEHEIM "$SECRET"
 zet OM_OIDC_GEHEIM "$OMSECRET"
 zet TRINO_OIDC_GEHEIM "$TRSECRET"
 zet POORT_OIDC_GEHEIM "$POSECRET"
-docker compose up -d portaal-migreer portaal openmetadata trino poort >/dev/null
+docker compose up -d >/dev/null
 ok "Het portaal, OpenMetadata en Trino loggen nu in via Keycloak (geheimen en uitgever staan in compose/.env)"

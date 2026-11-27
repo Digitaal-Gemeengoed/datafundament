@@ -16,14 +16,21 @@ datafundament:
           url_style: path
           use_ssl: "false"
           region: garage
+        # Lakekeeper: een token van Keycloak voor service-account df-lk-werk (DF-ADR-019).
+        - type: iceberg
+          name: lakekeeper
+          client_id: df-lk-werk
+          client_secret: "{{ env_var('LK_WERK_GEHEIM', '') }}"
+          oauth2_scope: lakekeeper
+          oauth2_server_uri: "{{ env_var('PYICEBERG_CATALOG__DEFAULT__OAUTH2_SERVER_URI', '') }}"
       attach:
         # Het lakehouse: dezelfde ATTACH als in proeven/iceberg-schrijfpad.
         - path: datafundament
           alias: lakehouse
           type: iceberg
+          secret: lakekeeper
           options:
             endpoint: http://lakekeeper:8181/catalog
-            authorization_type: none
             access_delegation_mode: none
         # Het datawarehouse (PostGIS), voor dataproducten met strikte integriteit.
         - path: "host=db dbname=dwh user=dwh_schrijver password={{ env_var('DWH_SCHRIJVER_WACHTWOORD', '') }}"
