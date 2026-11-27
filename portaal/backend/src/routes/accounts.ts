@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { AppFout } from "../app.js";
 import { schrijfAudit } from "../audit.js";
 import { inTransactie } from "../db.js";
+import type { Herstel } from "../keycloakbeheer.js";
 import { bericht } from "../mail.js";
 import { voerStatuswijzigingenUit } from "../persoon.js";
 import { laadDoel, laadGroepen, magBeheren, magGroepGeven, weigerAls } from "../regels.js";
@@ -42,7 +43,17 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
     )).rows;
     const sessies = (await d.pool.query("SELECT count(*)::int AS n FROM sessies WHERE account = $1 AND beeindigd IS NULL AND hard_einde > now()", [a.id])).rows[0].n;
     const laatst = (await d.pool.query("SELECT max(laatst_actief) AS t FROM sessies WHERE account = $1", [a.id])).rows[0].t;
-    return { ...a, groepen, wijzigingen, actieveSessies: sessies, laatst_actief: laatst, beheerbaar: req.persoon!.rechten.has("accounts.manage") && magBeheren(req.persoon!, a) === null };
+    // Het inlogaccount in Keycloak: bestaat het, en moet de gebruiker nog iets instellen?
+    let inlog: Record<string, unknown> | null = null;
+    if (d.keycloak && !a.hoofdaccount) {
+      try {
+        const k = await d.keycloak.inlogaccount(a.email);
+        inlog = k ? { bestaat: true, actief: k.actief, openStappen: k.openStappen, authenticator: k.authenticator } : { bestaat: false };
+      } catch (e) {
+        inlog = { fout: (e as Error).message };
+      }
+    }
+    return { ...a, groepen, wijzigingen, actieveSessies: sessies, laatst_actief: laatst, inlog, beheerbaar: req.persoon!.rechten.has("accounts.manage") && magBeheren(req.persoon!, a) === null };
   });
 
   /** Een account toevoegen. Nooit door zelf aan te melden; de persoon logt in via Keycloak met dit e-mailadres. */
@@ -78,11 +89,76 @@ export async function accountRoutes(app: FastifyInstance): Promise<void> {
         await schrijfAudit(c, { account: p.id, email: p.email, actie: "account.aangemaakt", doel: nieuw, ip: req.ip, resultaat: "ok", details: { email, naam: req.body.naam, groepen: groepen.map((g) => g.naam), reden: req.body.reden } });
         return nieuw;
       });
+      // Het inlogaccount in Keycloak, en de mail om wachtwoord en authenticator in te stellen.
+      let inlogmail: "verstuurd" | "bestond" | "mislukt" | "uit" = "uit";
+      if (d.keycloak) {
+        try {
+          const k = await d.keycloak.zorgVoor(email, req.body.naam);
+          if (k.nieuw) {
+            await d.keycloak.stuurMail(k.id, ["wachtwoord", "authenticator"]);
+            inlogmail = "verstuurd";
+          } else {
+            inlogmail = "bestond";
+          }
+          await schrijfAudit(d.pool, { account: p.id, email: p.email, actie: "account.inlogmail", doel: id, ip: req.ip, resultaat: "ok", details: { nieuw: k.nieuw, wat: k.nieuw ? ["wachtwoord", "authenticator"] : [] } });
+        } catch (e) {
+          inlogmail = "mislukt";
+          req.log.error({ fout: (e as Error).message }, "inlogaccount of mail van Keycloak mislukt");
+        }
+      }
+      const link = inlogmail === "verstuurd";
       const b = req.body.taal === "nl"
-        ? bericht([email], "Je hebt toegang tot het portaal van het Datafundament", [`${p.naam} heeft je toegang gegeven tot ${d.config.herkomst}.`, "Je logt in met je account in Keycloak. Heb je daar nog geen tweestapsverificatie, dan stel je die bij de eerste aanmelding in.", `Inloggen: ${d.config.herkomst}/`])
-        : bericht([email], "You have access to the Datafundament portal", [`${p.naam} has given you access to ${d.config.herkomst}.`, "You sign in with your Keycloak account. If you do not have two-factor authentication yet, you set it up at your first sign-in.", `Sign in: ${d.config.herkomst}/`]);
+        ? bericht([email], "Je hebt toegang tot het portaal van het Datafundament", [
+            `${p.naam} heeft je toegang gegeven tot ${d.config.herkomst}.`,
+            link
+              ? "Je krijgt een aparte mail van Keycloak met een link (drie dagen geldig). Daarmee kies je een wachtwoord en koppel je een authenticator-app: je scant een QR-code met bijvoorbeeld Microsoft Authenticator, Google Authenticator of FreeOTP."
+              : "Je logt in met je account in Keycloak. Heb je daar nog geen tweestapsverificatie, dan stel je die bij de eerste aanmelding in.",
+            `Daarna inloggen: ${d.config.herkomst}/`])
+        : bericht([email], "You have access to the Datafundament portal", [
+            `${p.naam} has given you access to ${d.config.herkomst}.`,
+            link
+              ? "You will receive a separate e-mail from Keycloak with a link (valid for three days). With it you choose a password and link an authenticator app by scanning a QR code."
+              : "You sign in with your Keycloak account. If you do not have two-factor authentication yet, you set it up at your first sign-in.",
+            `Then sign in: ${d.config.herkomst}/`]);
       await d.mailer.verstuur(b).catch((e) => req.log.error({ fout: (e as Error).message }, "uitnodiging niet verstuurd"));
-      return antwoord.code(201).send({ id });
+      return antwoord.code(201).send({ id, inlogmail });
+    },
+  );
+
+  /**
+   * De uitnodiging opnieuw, of herstel: Keycloak stuurt een mail met een link om een
+   * (nieuw) wachtwoord en/of een (nieuwe) authenticator in te stellen. Bestaat het
+   * inlogaccount nog niet, dan maakt het portaal het eerst aan (beide stappen).
+   */
+  app.post<{ Params: { id: string }; Body: { wat: Herstel[]; reden: string } }>(
+    "/api/accounts/:id/inlogmail",
+    {
+      schema: {
+        params: { type: "object", properties: { id: UUID } },
+        body: {
+          type: "object", required: ["wat", "reden"], additionalProperties: false,
+          properties: { wat: { type: "array", minItems: 1, maxItems: 2, uniqueItems: true, items: { enum: ["wachtwoord", "authenticator"] } }, reden: REDEN },
+        },
+      },
+    },
+    async (req) => {
+      vereis(req, "accounts.manage");
+      const p = req.persoon!;
+      const a = await laadDoel(d.pool, req.params.id);
+      weigerAls(magBeheren(p, a));
+      if (!d.keycloak) throw new AppFout(503, "keycloak-uit", "Het portaal beheert geen inlogaccounts in Keycloak (KEYCLOAK_INTERN ontbreekt).");
+      if (a.hoofdaccount) throw new AppFout(409, "hoofdaccount", "Het hoofdaccount logt niet in via Keycloak; gebruik nood-instellen.");
+      if (a.status !== "actief") throw new AppFout(409, "niet-actief", "Dit account is niet actief.");
+      const k = await d.keycloak.zorgVoor(a.email, a.naam);
+      const wat: Herstel[] = k.nieuw ? ["wachtwoord", "authenticator"] : req.body.wat;
+      try {
+        await d.keycloak.stuurMail(k.id, wat);
+      } catch (e) {
+        await schrijfAudit(d.pool, { account: p.id, email: p.email, actie: "account.inlogmail", doel: a.id, ip: req.ip, resultaat: "fout", details: { wat, nieuw: k.nieuw, reden: req.body.reden } });
+        throw e;
+      }
+      await schrijfAudit(d.pool, { account: p.id, email: p.email, actie: "account.inlogmail", doel: a.id, ip: req.ip, resultaat: "ok", details: { wat, nieuw: k.nieuw, reden: req.body.reden } });
+      return { wat, nieuw: k.nieuw };
     },
   );
 

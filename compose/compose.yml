@@ -294,6 +294,8 @@ services:
       # Uitnodigingen en meldingen. Zonder SMTP_HOST schrijft het portaal alleen in
       # zijn log dat er een e-mail niet is verstuurd.
       SMTP_HOST: ${SMTP_HOST:-}
+      # Inlogaccounts in Keycloak beheren (uitnodiging, herstel), via het compose-netwerk.
+      KEYCLOAK_INTERN: http://keycloak:8080
       SMTP_POORT: ${SMTP_POORT:-587}
       SMTP_TLS: ${SMTP_TLS:-starttls}
       SMTP_GEBRUIKER: ${SMTP_GEBRUIKER:-}

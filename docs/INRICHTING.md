@@ -182,6 +182,32 @@ ssh -L 8088:127.0.0.1:8088 beheer@207.180.253.52
 
 Ga daarna naar `http://localhost:8088/admin` (gebruiker `beheer`; het wachtwoord staat als `KC_BEHEERDER_WACHTWOORD` in `compose/.env`).
 
+## Inloggen: uitnodigen, wachtwoord vergeten, authenticator kwijt
+
+Met een mailserver regelt Keycloak dit zelf. Zet de gegevens onderaan in `compose/.env` op dfc:
+
+```
+SMTP_HOST=smtp.jouwprovider.nl
+SMTP_POORT=587
+SMTP_TLS=starttls            # bij poort 465: tls
+SMTP_GEBRUIKER=...
+SMTP_WACHTWOORD=...
+SMTP_AFZENDER=Datafundament <noreply@haarlem.dev>
+```
+
+Draai daarna `sudo /opt/datafundament/server/installeer-platform.sh`. Het portaal en Keycloak gebruiken dan dezelfde mailserver.
+
+- **Nieuw account in het portaal:** het portaal maakt ook het inlogaccount in Keycloak aan. Keycloak stuurt een mail met een link, drie dagen geldig. Daarmee kiest de gebruiker een wachtwoord en scant hij de QR-code voor zijn authenticator-app.
+- **Op de pagina van een account**, onder *Inloggen (Keycloak)*, zie je of het wachtwoord en de app zijn ingesteld. Een beheerder kan daar Keycloak een mail laten sturen:
+  - de uitnodiging opnieuw;
+  - alleen een nieuw wachtwoord;
+  - alleen een nieuwe koppeling van de app.
+
+  Een nieuwe app komt naast de oude. De oude verwijdert de gebruiker zelf in zijn account. Stuur een herstel alleen als vaststaat dat de vraag van de gebruiker zelf komt.
+- **Zelf herstellen:** op de inlogpagina van Keycloak staat *Wachtwoord vergeten?*. De link in de mail vraagt een nieuw wachtwoord en toont ook de QR-code opnieuw. Zo komt wie zijn app kwijt is weer binnen, maar alleen met toegang tot zijn eigen mailbox.
+
+Zonder mailserver werkt geen van deze routes. Een nieuwe gebruiker krijgt dan van de beheerder een tijdelijk wachtwoord via `server/keycloak.sh`.
+
 ## 9. OpenMetadata
 
 Het installatiescript zet OpenMetadata al neer, op `https://metadata.datafundament.haarlem.dev`. Het doet daarbij:

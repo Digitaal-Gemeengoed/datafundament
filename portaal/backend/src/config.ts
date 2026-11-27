@@ -35,6 +35,12 @@ export interface Config {
   databaseUrl: string;
   hoofdaccountEmail: string;
   oidc: { issuer: string; clientId: string; clientSecret: string } | null;
+  /**
+   * Keycloak binnen het compose-netwerk (http://keycloak:8080), voor het beheer
+   * van inlogaccounts met het service-account van dezelfde client. Null: het
+   * portaal beheert geen inlogaccounts (geen knoppen voor uitnodiging en herstel).
+   */
+  keycloakIntern: string | null;
   smtp: { host: string; poort: number; gebruiker: string; wachtwoord: string; afzender: string; tls: "starttls" | "tls" | "geen" } | null;
   /**
    * De onderdelen van het platform, binnen het compose-netwerk. Het portaal
@@ -82,6 +88,7 @@ export function leesConfig(env: NodeJS.ProcessEnv = process.env): Config {
     adminSecret: geheim(env, "ADMIN_SECRET", 32),
     databaseUrl: nodig(env, "DATABASE_URL"),
     hoofdaccountEmail: nodig(env, "HOOFDACCOUNT_EMAIL").toLowerCase(),
+    keycloakIntern: oidcAan && env.KEYCLOAK_INTERN ? env.KEYCLOAK_INTERN.replace(/\/$/, "") : null,
     oidc: oidcAan
       ? { issuer: nodig(env, "OIDC_ISSUER").replace(/\/$/, ""), clientId: nodig(env, "OIDC_CLIENT_ID"), clientSecret: geheim(env, "OIDC_CLIENT_SECRET", 32) }
       : null,
