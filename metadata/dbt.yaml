@@ -1,0 +1,19 @@
+# dbt: beschrijvingen, lineage van model tot model en de uitkomst van elke test
+# (DF-ADR-007). Op dezelfde dienst als Trino: dbt schrijft naar de catalogi
+# lakehouse en dwh, die in Trino precies zo heten.
+source:
+  type: dbt
+  serviceName: lakehouse
+  sourceConfig:
+    config:
+      type: DBT
+      dbtConfigSource:
+        dbtConfigType: local
+        dbtManifestFilePath: /var/lib/dbt/docs/manifest.json
+        dbtCatalogFilePath: /var/lib/dbt/docs/catalog.json
+        dbtRunResultsFilePath: /var/lib/dbt/laatste/run_results.json
+      dbtUpdateDescriptions: true
+      includeTags: true
+sink:
+  type: metadata-rest
+  config: {}

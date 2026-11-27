@@ -25,7 +25,8 @@ meld "Instellingen en geheimen ($DF_REPO/compose/.env)"
 umask 077; touch "$ENV"; umask 022; chmod 600 "$ENV"
 vul_aan DOMEIN datafundament.haarlem.dev
 for n in DB_WACHTWOORD LK_DB_WACHTWOORD DAGSTER_DB_WACHTWOORD DWH_SCHRIJVER_WACHTWOORD DWH_LEZER_WACHTWOORD \
-         KC_DB_WACHTWOORD KC_BEHEERDER_WACHTWOORD PORTAAL_DB_WACHTWOORD PORTAAL_APP_WACHTWOORD KLUIS_DB_WACHTWOORD; do
+         KC_DB_WACHTWOORD KC_BEHEERDER_WACHTWOORD PORTAAL_DB_WACHTWOORD PORTAAL_APP_WACHTWOORD KLUIS_DB_WACHTWOORD \
+         OM_DB_WACHTWOORD; do
   vul_aan "$n" "$(geheim 24)"
 done
 vul_aan LK_SLEUTEL "$(geheim 32)"
@@ -33,6 +34,9 @@ vul_aan PORTAAL_ADMIN_GEHEIM "$(geheim 32)"
 # Trino levert elke datavraag af bij het portaal, met dit token (DF-ADR-016).
 vul_aan DATAVRAGEN_TOKEN "$(geheim 32)"
 vul_aan GARAGE_RPC_GEHEIM "$(geheim 32)"
+# OpenMetadata (DF-ADR-007): een eigen Fernet-sleutel en sleutel-id voor de tokens.
+vul_aan OM_FERNET_SLEUTEL "$(openssl rand -base64 32 | tr '+/' '-_')"
+vul_aan OM_JWT_SLEUTEL_ID "$(geheim 16)"
 for k in BEHEER LAKEKEEPER SCHRIJVER LEZER LANDING; do
   vul_aan "GARAGE_${k}_SLEUTEL" "GK$(geheim 12)"
   vul_aan "GARAGE_${k}_GEHEIM" "$(geheim 32)"
@@ -74,6 +78,26 @@ if ! grep -q '^WEB_WACHTWOORD=' "$ENV"; then
 fi
 ok "Alle instellingen staan in .env (alleen leesbaar voor root)"
 
+# OpenMetadata tekent zijn tokens met een RSA-sleutel. Die in het image is openbaar;
+# hier een eigen, alleen leesbaar voor de gebruiker in de container (65532).
+OMS="$DF_REPO/compose/openmetadata"
+if [ ! -f "$OMS/private_key.der" ]; then
+  install -d -m 700 "$OMS"
+  T="$(mktemp)"
+  openssl genrsa -out "$T" 2048 2>/dev/null
+  openssl pkcs8 -topk8 -inform PEM -outform DER -nocrypt -in "$T" -out "$OMS/private_key.der"
+  openssl rsa -in "$T" -pubout -outform DER -out "$OMS/public_key.der" 2>/dev/null
+  shred -u "$T" 2>/dev/null || rm -f "$T"
+  ok "Eigen RSA-sleutels voor OpenMetadata"
+fi
+chown -R 65532:65532 "$OMS"; chmod 700 "$OMS"; chmod 400 "$OMS"/*.der
+# OpenSearch (de zoekindex van OpenMetadata) vraagt meer geheugenkaarten.
+if [ "$(sysctl -n vm.max_map_count)" -lt 262144 ]; then
+  echo "vm.max_map_count=262144" > /etc/sysctl.d/90-datafundament.conf
+  sysctl -q -p /etc/sysctl.d/90-datafundament.conf
+  ok "vm.max_map_count op 262144 (voor OpenSearch)"
+fi
+
 # Het poortfilter bijwerken (nieuwe poorten, zoals Garage voor de landingsbucket).
 if [ -x /usr/local/sbin/df-docker-filter ] && ! cmp -s "$DF_REPO/server/docker-filter.sh" /usr/local/sbin/df-docker-filter; then
   install -m 755 "$DF_REPO/server/docker-filter.sh" /usr/local/sbin/df-docker-filter
@@ -95,7 +119,8 @@ fi
 
 meld "Images ophalen en de code bouwen (eerste keer: een paar minuten)"
 docker compose build -q werk portaal-migreer
-docker compose pull -q --ignore-buildable db garage lakekeeper lakekeeper-migratie trino caddy keycloak
+docker compose pull -q --ignore-buildable db garage lakekeeper lakekeeper-migratie trino caddy keycloak \
+  zoekindex openmetadata openmetadata-migratie
 ok "Klaar"
 
 meld "Database en opslag"
@@ -123,7 +148,9 @@ rol df_portaal "$(waarde PORTAAL_DB_WACHTWOORD)";   database df_portaal df_porta
 rol df_portaal_app "$(waarde PORTAAL_APP_WACHTWOORD)"
 psql_beheer -c "GRANT CONNECT ON DATABASE df_portaal TO df_portaal, df_portaal_app"
 rol kluis "$(waarde KLUIS_DB_WACHTWOORD)";          database kluis kluis
-ok "Databases voor Keycloak, het portaal en de kluis"
+rol openmetadata "$(waarde OM_DB_WACHTWOORD)";       database openmetadata openmetadata
+psql_beheer -c "ALTER ROLE openmetadata SET work_mem = '10MB'"
+ok "Databases voor Keycloak, het portaal, de kluis en OpenMetadata"
 
 garage() { docker compose exec -T garage /garage "$@"; }
 # Een eigen sleutel per onderdeel (DF-ADR-002): Lakekeeper en de schrijvers lezen
@@ -157,11 +184,11 @@ docker compose run --rm --no-deps -T \
   -e GARAGE_LAKEKEEPER_GEHEIM="$(waarde GARAGE_LAKEKEEPER_GEHEIM)" \
   werk python -m beheer.inrichten
 
-meld "De rest: Trino, Dagster, Keycloak, portaal, Caddy"
+meld "De rest: Trino, Dagster, Keycloak, portaal, OpenMetadata, Caddy"
 docker compose up -d --remove-orphans
 ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
 
-if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ]; then
+if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ]; then
   "$DF_REPO/server/keycloak.sh"
 fi
 
@@ -169,6 +196,7 @@ D="$(waarde DOMEIN)"
 cat <<EOF
 
   Portaal:      https://admin.$D/   (inloggen via Keycloak; noodaccount op /emergency)
+  Metadata:     https://metadata.$D/   (OpenMetadata; inloggen via Keycloak)
   Startpagina:  https://$D/
   Dagster:      https://dagster.$D/
   Lakekeeper:   https://catalogus.$D/ui/
@@ -189,4 +217,12 @@ cat <<EOF
     Geheim:     opnieuw tonen met: sudo grep GARAGE_LANDING_GEHEIM= $DF_REPO/compose/.env
   Controleren: sudo docker compose -f $DF_REPO/compose/compose.yml ps
 EOF
+if [ -z "$(waarde OPENMETADATA_BOT_TOKEN)" ]; then
+  cat <<EOF
+
+  OpenMetadata wordt nog niet bijgewerkt. Log in op https://metadata.$D/ (als
+  $(waarde OM_BEHEERDER)), ga naar Settings → Bots → ingestion-bot, kopieer het token en:
+    sudo $DF_REPO/server/metadata-token.sh
+EOF
+fi
 echo

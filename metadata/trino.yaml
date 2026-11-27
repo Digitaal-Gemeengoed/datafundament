@@ -1,0 +1,24 @@
+# De catalogus: alle schema's en tabellen achter Trino, de enige voordeur
+# (DF-ADR-007, DF-ADR-008). Alleen metadata: geen voorbeeldrijen, geen profiel.
+# De ruwe lagen staan erin (wat er is, met welke kolommen), maar hun inhoud niet.
+source:
+  type: trino
+  serviceName: lakehouse
+  serviceConnection:
+    config:
+      type: Trino
+      hostPort: trino:8080
+      username: openmetadata
+  sourceConfig:
+    config:
+      type: DatabaseMetadata
+      markDeletedTables: true
+      includeViews: true
+      includeTags: false
+      databaseFilterPattern:
+        includes: ["^lakehouse$", "^dwh$"]
+      schemaFilterPattern:
+        excludes: ["^information_schema$", "^system$"]
+sink:
+  type: metadata-rest
+  config: {}

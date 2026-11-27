@@ -32,6 +32,7 @@ from dagster import (
 from dagster_dbt import DagsterDbtTranslator, DbtCliResource, DbtProject, dbt_assets
 
 from beheer import onderhoud
+from orkestratie import metadata as om
 from orkestratie.verwijderen import verwijderen
 from ingestie import bronnen, pdok
 
@@ -126,7 +127,12 @@ class Vertaler(DagsterDbtTranslator):
 
 @dbt_assets(manifest=DBT.manifest_path, project=DBT, dagster_dbt_translator=Vertaler())
 def dbt_modellen(context: AssetExecutionContext, dbt: DbtCliResource):
-    yield from dbt.cli(["build"], context=context).stream()
+    build = dbt.cli(["build"], context=context)
+    try:
+        yield from build.stream()
+    finally:
+        # Ook na een mislukte test: de uitkomst gaat naar OpenMetadata (DF-ADR-007).
+        om.bewaar_dbt_uitkomst(build.target_path)
 
 
 # --- Onderhoud ------------------------------------------------------------------------
@@ -150,7 +156,8 @@ keten_job = define_asset_job("keten", selection=AssetSelection.all() - AssetSele
 
 defs = Definitions(
     assets=bron_specs() + LADERS + [adres_locatie, cbs_buurten, dbt_modellen],
-    jobs=[ingestie_job, keten_job, onderhoud_lakehouse, verwijderen],
+    jobs=[ingestie_job, keten_job, onderhoud_lakehouse, verwijderen, om.metadata],
+    sensors=[om.sensor(keten_job)],
     resources={"dbt": DbtCliResource(project_dir=DBT)},
     schedules=[
         # Snel: wijzigingen in de bronnen komen binnen enkele minuten in de ruwe laag.

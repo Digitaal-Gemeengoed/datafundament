@@ -54,6 +54,10 @@ export class Koppelingen {
       }],
       ["Garage", `${this.c.garage}/health`, async () => "opslag antwoordt"],
     ];
+    if (this.c.openmetadata) {
+      proeven.push(["OpenMetadata", `${this.c.openmetadata}/api/v1/system/version`,
+        async (r) => `versie ${(await r.json()).version ?? "?"}`]);
+    }
     if (this.c.kluis) proeven.push(["Kluis (OpenBao)", `${this.c.kluis.adres}/v1/sys/health`, async () => "ontzegeld"]);
     return Promise.all(proeven.map(async ([naam, url, uitleg]) => {
       const begin = Date.now();

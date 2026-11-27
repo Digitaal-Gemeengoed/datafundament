@@ -1,0 +1,3 @@
+# De ingestie van OpenMetadata, in een eigen virtualenv (werk/Dockerfile).
+# Dezelfde versie als de server (compose/compose.yml); samen bijwerken.
+openmetadata-ingestion[trino,dbt,dagster]==2.1.1.0
