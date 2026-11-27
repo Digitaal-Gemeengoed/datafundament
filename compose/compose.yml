@@ -291,7 +291,11 @@ services:
       OPENMETADATA_URL: http://openmetadata:8585
       TRINO_URL: http://trino:8080
       GARAGE_URL: http://garage:3903
+      # Uitnodigingen en meldingen. Zonder SMTP_HOST schrijft het portaal alleen in
+      # zijn log dat er een e-mail niet is verstuurd.
       SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_POORT: ${SMTP_POORT:-587}
+      SMTP_TLS: ${SMTP_TLS:-starttls}
       SMTP_GEBRUIKER: ${SMTP_GEBRUIKER:-}
       SMTP_WACHTWOORD: ${SMTP_WACHTWOORD:-}
       SMTP_AFZENDER: ${SMTP_AFZENDER:-}
