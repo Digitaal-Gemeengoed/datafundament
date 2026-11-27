@@ -7,6 +7,7 @@ import { voerStatuswijzigingenUit } from "./persoon.js";
 import { ruimPogingenOp } from "./pogingen.js";
 import { routes } from "./routes/index.js";
 import { dagelijks } from "./routes/audit.js";
+import { ontvanger } from "./datavragen.js";
 
 const config = leesConfig();
 const pool = maakPool(config.databaseUrl);
@@ -32,4 +33,8 @@ verleng();
 setInterval(verleng, 24 * 3600_000).unref();
 
 await app.listen({ host: "0.0.0.0", port: config.poort });
-for (const s of ["SIGTERM", "SIGINT"]) process.on(s, () => app.close().then(() => pool.end()).finally(() => process.exit(0)));
+
+// De ontvanger van Trino, op een eigen poort binnen het compose-netwerk (niet via Caddy).
+const trino = config.datavragen ? ontvanger(pool, config.datavragen.token) : null;
+if (trino && config.datavragen) await trino.listen({ host: "0.0.0.0", port: config.datavragen.poort });
+for (const s of ["SIGTERM", "SIGINT"]) process.on(s, () => Promise.all([app.close(), trino?.close()]).then(() => pool.end()).finally(() => process.exit(0)));

@@ -34,3 +34,4 @@ Een besluit wordt niet herschreven. Verandert het, dan komt er een nieuw ADR, en
 | [013](DF-ADR-013-portaal-op-fundament-oa-beheer.md) | Een portaal op het fundament van oa-beheer | aanvaard |
 | [014](DF-ADR-014-simulatie-en-drie-ingestiepatronen.md) | Een gesimuleerd jaar, en drie manieren waarop data binnenkomt | aanvaard |
 | [015](DF-ADR-015-pseudonimisering-en-verwijderen.md) | Pseudoniemen bij de poort, een sleutelkluis, en verwijderen met crypto-shredding | aanvaard |
+| [016](DF-ADR-016-elke-datavraag-vastleggen.md) | Elke datavraag vastleggen, door Trino zelf | aanvaard |

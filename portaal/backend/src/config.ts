@@ -49,6 +49,11 @@ export interface Config {
      */
     kluis: { adres: string; token: string } | null;
   };
+  /**
+   * Het token waarmee Trino zijn gebeurtenissen aflevert op de interne poort
+   * (DF-ADR-016). Zonder token luistert de ontvanger niet.
+   */
+  datavragen: { token: string; poort: number } | null;
   /** Alleen voor tests en lokaal: een HMAC-sleutel in het proces in plaats van OpenBao. */
   kluisGeheim: string | null;
   /** Statische bestanden van de frontend. */
@@ -93,6 +98,9 @@ export function leesConfig(env: NodeJS.ProcessEnv = process.env): Config {
         ? { adres: env.KLUIS_BAO_ADRES.replace(/\/$/, ""), token: geheim(env, "KLUIS_BAO_TOKEN", 20) }
         : null,
     },
+    datavragen: env.DATAVRAGEN_TOKEN
+      ? { token: geheim(env, "DATAVRAGEN_TOKEN", 32), poort: Number(env.DATAVRAGEN_POORT ?? 4301) }
+      : null,
     kluisGeheim: env.KLUIS_GEHEIM ? geheim(env, "KLUIS_GEHEIM", 32) : null,
     frontendMap: env.FRONTEND_MAP ?? new URL("../../frontend/dist", import.meta.url).pathname,
     vertrouwProxy: env.VERTROUW_PROXY !== "nee",

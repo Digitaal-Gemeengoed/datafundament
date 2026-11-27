@@ -7,11 +7,13 @@ export const RECHTEN = [
   // Het Datafundament (migratie 003).
   "platform.view", "dataproducten.view", "toegang.aanvragen", "toegang.beoordelen",
   "verwijderen.aanvragen", "verwijderen.beoordelen",
+  // Elke datavraag (migratie 004).
+  "datavragen.view",
 ] as const;
 export type Recht = (typeof RECHTEN)[number];
 
 /** Rechten die alleen doorgeeft wie ze zelf heeft. */
-export const GEVOELIG: Recht[] = ["accounts.view", "accounts.manage", "groups.view", "groups.manage", "audit.view", "toegang.beoordelen", "verwijderen.aanvragen", "verwijderen.beoordelen"];
+export const GEVOELIG: Recht[] = ["accounts.view", "accounts.manage", "groups.view", "groups.manage", "audit.view", "toegang.beoordelen", "verwijderen.aanvragen", "verwijderen.beoordelen", "datavragen.view"];
 
 export interface Persoon {
   id: string;
