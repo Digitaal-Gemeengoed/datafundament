@@ -204,6 +204,15 @@ docker compose up -d --remove-orphans
 # Caddy en Trino krijgen losse configuratiebestanden. Na een git pull is dat een nieuw
 # bestand, dat een draaiende container niet ziet: herstarten, dan lezen ze het opnieuw.
 docker compose restart caddy trino >/dev/null
+# OpenMetadata richt het inloggen één keer in, bij het starten, en haalt dan de
+# gegevens van Keycloak op via https://id.<domein>. Lukt dat niet (Caddy herstart
+# net, of heeft nog geen certificaat), dan blijft SSO uit tot de volgende start.
+# Dus: wachten tot Keycloak via Caddy antwoordt, dan OpenMetadata herstarten.
+for _ in $(seq 1 60); do
+  curl -sf -o /dev/null --max-time 5 "https://id.$(waarde DOMEIN)/realms/datafundament/.well-known/openid-configuration" && break
+  sleep 3
+done
+docker compose restart openmetadata >/dev/null
 ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
 
 # Keycloak: de eerste keer met de vraag om een gebruiker, daarna alleen de instellingen.
