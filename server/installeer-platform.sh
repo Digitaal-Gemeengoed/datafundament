@@ -30,6 +30,8 @@ for n in DB_WACHTWOORD LK_DB_WACHTWOORD DAGSTER_DB_WACHTWOORD DWH_SCHRIJVER_WACH
 done
 vul_aan LK_SLEUTEL "$(geheim 32)"
 vul_aan PORTAAL_ADMIN_GEHEIM "$(geheim 32)"
+# Trino levert elke datavraag af bij het portaal, met dit token (DF-ADR-016).
+vul_aan DATAVRAGEN_TOKEN "$(geheim 32)"
 vul_aan GARAGE_RPC_GEHEIM "$(geheim 32)"
 for k in BEHEER LAKEKEEPER SCHRIJVER LEZER LANDING; do
   vul_aan "GARAGE_${k}_SLEUTEL" "GK$(geheim 12)"

@@ -129,8 +129,10 @@ services:
       GARAGE_LEZER_SLEUTEL: ${GARAGE_LEZER_SLEUTEL:?}
       GARAGE_LEZER_GEHEIM: ${GARAGE_LEZER_GEHEIM:?}
       DWH_LEZER_WACHTWOORD: ${DWH_LEZER_WACHTWOORD}
+      DATAVRAGEN_TOKEN: ${DATAVRAGEN_TOKEN:?}
     volumes:
       - ./trino/config.properties:/etc/trino/config.properties:ro
+      - ./trino/http-event-listener.properties:/etc/trino/http-event-listener.properties:ro
       - ../datahub/trino/catalog:/etc/trino/catalog:ro
     depends_on: [lakekeeper, db]
 
@@ -211,6 +213,8 @@ services:
       OIDC_CLIENT_SECRET: ${PORTAAL_OIDC_GEHEIM:-}
       KLUIS_BAO_ADRES: http://10.67.0.2:8200
       KLUIS_BAO_TOKEN: ${KLUIS_BAO_TOKEN_PORTAAL:?}
+      # De ontvanger van Trino (DF-ADR-016), op poort 4301 binnen het compose-netwerk.
+      DATAVRAGEN_TOKEN: ${DATAVRAGEN_TOKEN:?}
       DAGSTER_URL: http://dagster-webserver:3000
       DAGSTER_LOCATIE: datafundament
       LAKEKEEPER_URL: http://lakekeeper:8181

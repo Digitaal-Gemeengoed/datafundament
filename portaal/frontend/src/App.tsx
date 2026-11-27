@@ -13,6 +13,7 @@ import { Platform } from "./paginas/Platform";
 import { Dataproducten } from "./paginas/Dataproducten";
 import { Toegang } from "./paginas/Toegang";
 import { Verwijderen } from "./paginas/Verwijderen";
+import { Datavragen } from "./paginas/Datavragen";
 import { initialen } from "./paginas/gedeeld";
 
 /** Eenvoudige router op de History-API. */
@@ -83,6 +84,7 @@ export function App() {
   else if (pad === "/platform" && r.has("platform.view")) inhoud = <Platform />;
   else if (pad === "/dataproducten" && r.has("dataproducten.view")) inhoud = <Dataproducten ik={ik} />;
   else if (pad === "/toegang" && (r.has("toegang.aanvragen") || r.has("toegang.beoordelen"))) inhoud = <Toegang ik={ik} />;
+  else if (pad === "/datavragen" && r.has("datavragen.view")) inhoud = <Datavragen />;
   else if (pad === "/verwijderen" && (r.has("verwijderen.aanvragen") || r.has("verwijderen.beoordelen"))) inhoud = <Verwijderen ik={ik} />;
   else if (pad === "/profiel") inhoud = <Profiel ik={ik} opnieuw={laad} />;
   else inhoud = <Alert type="warning"><Paragraph>{t("geenRecht")}</Paragraph></Alert>;
@@ -123,7 +125,7 @@ export function App() {
               )}
               {(r.has("groups.view") || r.has("groups.manage") || r.has("accounts.manage")) && <li><L naar="/groepen">{t("groepen")}</L></li>}
             </ul>
-            {(r.has("platform.view") || r.has("dataproducten.view") || r.has("toegang.aanvragen") || r.has("toegang.beoordelen") || r.has("verwijderen.aanvragen") || r.has("verwijderen.beoordelen")) && (
+            {(r.has("platform.view") || r.has("dataproducten.view") || r.has("toegang.aanvragen") || r.has("toegang.beoordelen") || r.has("verwijderen.aanvragen") || r.has("verwijderen.beoordelen") || r.has("datavragen.view")) && (
               <>
                 <span className="ab-nav-kop">{t("navData")}</span>
                 <ul>
@@ -131,6 +133,7 @@ export function App() {
                   {r.has("dataproducten.view") && <li><L naar="/dataproducten">{t("dataproducten")}</L></li>}
                   {(r.has("toegang.aanvragen") || r.has("toegang.beoordelen")) && <li><L naar="/toegang">{t("toegangData")}</L></li>}
                   {(r.has("verwijderen.aanvragen") || r.has("verwijderen.beoordelen")) && <li><L naar="/verwijderen">{t("verwijderverzoeken")}</L></li>}
+                  {r.has("datavragen.view") && <li><L naar="/datavragen">{t("datavragen")}</L></li>}
                 </ul>
               </>
             )}

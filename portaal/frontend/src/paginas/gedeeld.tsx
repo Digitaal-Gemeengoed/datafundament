@@ -24,14 +24,15 @@ export function RedenVeld({ id, waarde, zet, uitleg }: { id: string; waarde: str
 }
 
 /** Laadt gegevens; opnieuw met herlaad(). */
-export function useLaden<T>(laad: () => Promise<T>): { data: T | null; fout: string | null; herlaad: () => void } {
+export function useLaden<T>(laad: () => Promise<T>, afhankelijk: unknown[] = []): { data: T | null; fout: string | null; herlaad: () => void } {
   const [data, zet] = useState<T | null>(null);
   const [fout, zetFout] = useState<string | null>(null);
   const [teller, zetTeller] = useState(0);
   useEffect(() => {
+    zetFout(null);
     laad().then(zet, (e) => zetFout(foutTekst(e)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [teller]);
+  }, [teller, ...afhankelijk]);
   return { data, fout, herlaad: () => zetTeller((n) => n + 1) };
 }
 
