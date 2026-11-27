@@ -17,6 +17,16 @@ run_coordinator:
   config:
     max_concurrent_runs: 1
 
+# Een run waarvan het proces verdween (bijvoorbeeld bij een herstart van werk),
+# zou anders voor altijd STARTED blijven en met max_concurrent_runs: 1 alles
+# blokkeren. De daemon controleert de runs en zet zo'n run op mislukt.
+run_monitoring:
+  enabled: true
+  start_timeout_seconds: 300
+  cancel_timeout_seconds: 300
+  max_runtime_seconds: 7200
+  poll_interval_seconds: 60
+
 # Logboeken van runs op een volume dat webserver, daemon en code delen.
 compute_logs:
   module: dagster._core.storage.local_compute_log_manager

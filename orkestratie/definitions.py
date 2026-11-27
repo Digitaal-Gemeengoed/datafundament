@@ -22,7 +22,12 @@ from dagster import (
     Definitions,
     MaterializeResult,
     OpExecutionContext,
-    ScheduleDefinition,
+    DagsterRunStatus,
+    RunRequest,
+    RunsFilter,
+    ScheduleEvaluationContext,
+    SkipReason,
+    schedule,
     asset,
     define_asset_job,
     job,
@@ -152,6 +157,21 @@ def onderhoud_lakehouse():
 # --- Jobs en schema's --------------------------------------------------------------
 
 ingestie_job = define_asset_job("ingestie", selection=AssetSelection.assets(*LADERS))
+
+BEZIG = [DagsterRunStatus.QUEUED, DagsterRunStatus.NOT_STARTED, DagsterRunStatus.STARTING, DagsterRunStatus.STARTED]
+
+
+def periodiek(naam, job_def, cron):
+    """Een schema dat overslaat zolang er van deze job nog een run wacht of loopt.
+    Zo groeit de wachtrij niet als een run lang duurt of vastzit."""
+    @schedule(name=naam, job=job_def, cron_schedule=cron, execution_timezone="Europe/Amsterdam",
+              default_status=DefaultScheduleStatus.RUNNING)
+    def _schema(context: ScheduleEvaluationContext):
+        bezig = context.instance.get_runs_count(RunsFilter(job_name=job_def.name, statuses=BEZIG))
+        if bezig:
+            return SkipReason(f"Er wacht of loopt al een run van {job_def.name}")
+        return RunRequest()
+    return _schema
 keten_job = define_asset_job("keten", selection=AssetSelection.all() - AssetSelection.groups("bron"))
 
 defs = Definitions(
@@ -161,28 +181,10 @@ defs = Definitions(
     resources={"dbt": DbtCliResource(project_dir=DBT)},
     schedules=[
         # Snel: wijzigingen in de bronnen komen binnen enkele minuten in de ruwe laag.
-        ScheduleDefinition(
-            name="ingestie_elke_5_minuten",
-            job=ingestie_job,
-            cron_schedule="*/5 * * * *",
-            execution_timezone="Europe/Amsterdam",
-            default_status=DefaultScheduleStatus.RUNNING,
-        ),
+        periodiek("ingestie_elke_5_minuten", ingestie_job, "*/5 * * * *"),
         # 's Nachts: oude snapshots opruimen.
-        ScheduleDefinition(
-            name="onderhoud_elke_nacht",
-            job=onderhoud_lakehouse,
-            cron_schedule="37 3 * * *",
-            execution_timezone="Europe/Amsterdam",
-            default_status=DefaultScheduleStatus.RUNNING,
-        ),
+        periodiek("onderhoud_elke_nacht", onderhoud_lakehouse, "37 3 * * *"),
         # De hele keten, tot en met de dataproducten.
-        ScheduleDefinition(
-            name="keten_elk_kwartier",
-            job=keten_job,
-            cron_schedule="2,17,32,47 * * * *",
-            execution_timezone="Europe/Amsterdam",
-            default_status=DefaultScheduleStatus.RUNNING,
-        ),
+        periodiek("keten_elk_kwartier", keten_job, "2,17,32,47 * * * *"),
     ],
 )
