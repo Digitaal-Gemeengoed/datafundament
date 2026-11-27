@@ -234,6 +234,8 @@ def laden():
                             [pl_id, s["index"], r["index"], r["status"]["code"] == 2,
                              bool(r["incorrect"])] + [waarden[x] for x in k])
                         aantal[tabel] += 1
+        import publicaties  # pylint: disable=import-outside-toplevel
+        publicaties.zet(cur)
         con.commit()
     print(f"Geladen: {len(personen)} persoonslijsten, {len(codes)} codes.")
     for tabel, n in sorted(aantal.items()):
@@ -337,8 +339,11 @@ def kolom_erbij():
         cur.execute("UPDATE brp.persoon SET indicatie_digitaal_contact = 'J', gewijzigd_op = now() "
                     "WHERE actueel AND id IN (SELECT id FROM brp.persoon WHERE actueel ORDER BY random() LIMIT 25)")
         n = cur.rowcount
+        # De nieuwe kolom in de publicatie, anders komt hij niet via CDC door.
+        import publicaties  # pylint: disable=import-outside-toplevel
+        publicaties.zet(cur)
         con.commit()
-    print(f"Kolom brp.persoon.indicatie_digitaal_contact toegevoegd; {n} personen hebben 'J'.")
+    print(f"Kolom brp.persoon.indicatie_digitaal_contact toegevoegd (en in de publicatie); {n} personen hebben 'J'.")
 
 
 def status():
@@ -350,14 +355,9 @@ def status():
                         f'FROM brp."{t}"' if t != "codetabel" else 'SELECT count(*), 0 FROM brp.codetabel')
             n, recent = cur.fetchone()
             print(f"  brp.{t:26} {n:6} rijen{f', {recent} gewijzigd in het laatste etmaal' if recent else ''}")
-        cur.execute("SELECT pubname FROM pg_publication")
-        print("Publicaties:", ", ".join(r[0] for r in cur.fetchall()) or "geen")
-        cur.execute("SELECT slot_name, active, pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), restart_lsn)) "
-                    "FROM pg_replication_slots")
-        slots = cur.fetchall()
-        print("Replicatieslots:", "geen" if not slots else "")
-        for naam, actief, achter in slots:
-            print(f"  {naam}: {'actief' if actief else 'niet actief'}, {achter} WAL vastgehouden")
+        print("Replicatie (CDC):")
+        import publicaties  # pylint: disable=import-outside-toplevel
+        publicaties.status(cur)
 
 
 def main(args):
@@ -379,6 +379,9 @@ def main(args):
         kolom_erbij()
     elif opdracht == "status":
         status()
+    elif opdracht == "publicaties":
+        import publicaties  # pylint: disable=import-outside-toplevel
+        publicaties.main(rest)
     elif opdracht in ("simuleer", "simulatie-status"):
         import simulatie  # pylint: disable=import-outside-toplevel
         with verbind() as con:

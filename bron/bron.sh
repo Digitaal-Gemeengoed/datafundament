@@ -20,6 +20,7 @@
 #   sudo ./bron.sh kluis-ontzegel     OpenBao ontzegelen, na elke herstart
 #   sudo ./bron.sh kluis-status       is de kluis ingericht en ontzegeld?
 #   sudo ./bron.sh dlt-wachtwoord     het wachtwoord van dlt_lezer, voor dfc
+#   sudo ./bron.sh publicaties        de publicaties voor CDC bijwerken (na een schemawijziging)
 #   sudo ./bron.sh status             aantallen, laatste wijzigingen, replicatie
 #   sudo ./bron.sh psql               SQL-prompt in de bron
 #   sudo ./bron.sh opnieuw            alles weg en opnieuw beginnen (vraagt eerst)
@@ -195,7 +196,7 @@ EOF
 
 case "${1:-help}" in
   start) start ;;
-  laden|verhuis|overlijden|kolom-erbij|status|synthetisch|melding|zaak-afhandelen|simuleer|simulatie-status|export-belastingen)
+  laden|verhuis|overlijden|kolom-erbij|status|publicaties|synthetisch|melding|zaak-afhandelen|simuleer|simulatie-status|export-belastingen)
     maak_env; werkbank "$@"
     if [ "$1" = synthetisch ]; then docker compose up -d zaken-api >/dev/null && ok "De Zaken-API draait"; fi ;;
   simulatie-aan)
@@ -235,5 +236,5 @@ case "${1:-help}" in
     werkbank laden
     werkbank synthetisch
     docker compose up -d zaken-api ;;
-  *) sed -n '2,25p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//' ;;
 esac

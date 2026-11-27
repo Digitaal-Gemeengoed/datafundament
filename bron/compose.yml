@@ -18,7 +18,8 @@ services:
       - -c
       - wal_level=logical
       - -c
-      - max_replication_slots=10
+      # Twee slots per databasebron (ruw en stand), met ruimte over.
+      - max_replication_slots=20
       - -c
       - max_wal_senders=10
       # Een replicatieslot dat niemand leest, houdt WAL vast. Hier stopt dat bij 2 GB,

@@ -457,22 +457,14 @@ def schrijf(con, uit):
                                     "REVOKE USAGE ON SCHEMA {s} FROM dlt_lezer; "
                                     "ALTER DEFAULT PRIVILEGES IN SCHEMA {s} REVOKE SELECT ON TABLES FROM dlt_lezer"
                                     ).format(s=sql.Identifier(s)))
-                cur.execute("SELECT 1 FROM pg_publication_namespace pn JOIN pg_publication p ON p.oid = pn.pnpubid "
-                            "JOIN pg_namespace n ON n.oid = pn.pnnspid WHERE p.pubname = 'datafundament' "
-                            "AND n.nspname = %s", (s,))
-                if cur.fetchone():
-                    cur.execute(sql.SQL("ALTER PUBLICATION datafundament DROP TABLES IN SCHEMA {}").format(
-                        sql.Identifier(s)))
                 continue
             cur.execute(sql.SQL("GRANT USAGE ON SCHEMA {s} TO dlt_lezer; "
                                 "GRANT SELECT ON ALL TABLES IN SCHEMA {s} TO dlt_lezer; "
                                 "ALTER DEFAULT PRIVILEGES IN SCHEMA {s} GRANT SELECT ON TABLES TO dlt_lezer").format(
                 s=sql.Identifier(s)))
-            cur.execute("SELECT 1 FROM pg_publication_namespace pn JOIN pg_publication p ON p.oid = pn.pnpubid "
-                        "JOIN pg_namespace n ON n.oid = pn.pnnspid WHERE p.pubname = 'datafundament' AND n.nspname = %s",
-                        (s,))
-            if not cur.fetchone():
-                cur.execute(sql.SQL("ALTER PUBLICATION datafundament ADD TABLES IN SCHEMA {}").format(sql.Identifier(s)))
+        # De publicaties voor CDC, met per tabel de kolommen (DF-ADR-006).
+        import publicaties  # pylint: disable=import-outside-toplevel
+        publicaties.zet(cur)
         # De Zaken-API leest met een eigen rol, alleen het schema zaken.
         wachtwoord = os.environ.get("ZAKEN_API_DB_WACHTWOORD")
         if wachtwoord:
