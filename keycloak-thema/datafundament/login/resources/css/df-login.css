@@ -1,0 +1,155 @@
+/*
+ * Inlogpagina's van de Office Assistent. Kleuren en lettertype komen uit het
+ * voorbeeldthema van NL Design System, net als in de panelen; de compacte
+ * maten hieronder zijn dezelfde als in df-paneel/src/paneel.css.
+ */
+html.df-html { background: var(--utrecht-document-background-color, #fff); }
+
+body.df-login {
+  margin: 0;
+  min-height: 100vh;
+  background: var(--utrecht-document-background-color, #fff);
+  color: var(--utrecht-document-color, #1d1d1b);
+  font-family: var(--utrecht-document-font-family, system-ui, sans-serif);
+  --df-tekst: 14px;
+  --df-primair: var(--utrecht-button-primary-action-background-color, #1a5ea8);
+  --utrecht-paragraph-font-size: var(--df-tekst);
+  --utrecht-paragraph-line-height: 1.45;
+  --utrecht-paragraph-small-font-size: 0.8125rem;
+  --utrecht-heading-2-font-size: 1.25rem;
+  --utrecht-heading-2-line-height: 1.3;
+  --utrecht-form-label-font-size: var(--df-tekst);
+  --utrecht-form-label-line-height: 1.4;
+  --utrecht-form-field-description-font-size: 0.8125rem;
+  --utrecht-button-font-size: var(--df-tekst);
+  --utrecht-button-line-height: 1.3;
+  --utrecht-button-min-block-size: 40px;
+  --utrecht-button-padding-block-start: 8px;
+  --utrecht-button-padding-block-end: 8px;
+  --utrecht-button-padding-inline-start: 14px;
+  --utrecht-button-padding-inline-end: 14px;
+  --utrecht-textbox-font-size: var(--df-tekst);
+  --utrecht-textbox-padding-block-start: 8px;
+  --utrecht-textbox-padding-block-end: 8px;
+  --utrecht-textbox-padding-inline-start: 10px;
+  --utrecht-textbox-padding-inline-end: 10px;
+  --utrecht-alert-padding-block-start: 10px;
+  --utrecht-alert-padding-block-end: 10px;
+  --utrecht-alert-padding-inline-start: 12px;
+  --utrecht-alert-padding-inline-end: 12px;
+  font-size: var(--df-tekst);
+}
+.df-login *, .df-login *::before, .df-login *::after { box-sizing: border-box; }
+
+/* Smal (zijpaneel): de hele breedte. Breed (browser): een kaart in het midden. */
+.df-pagina { display: flex; justify-content: center; padding: 16px; }
+.df-kaart { width: 100%; max-width: 26rem; display: flex; flex-direction: column; gap: 16px; }
+html.df-html, body.df-login { background: var(--ab-achter, #f3f5f9); }
+@media (min-width: 40rem) {
+  .df-pagina { padding: 72px 16px; }
+  .df-kaart { background: var(--ab-kaart, #fff); border: 1px solid var(--ab-rand, #e1e6ee); border-radius: var(--ab-hoek-groot, 12px); box-shadow: var(--ab-schaduw); padding: 28px; }
+}
+/* Smal (telefoon): de kaart ook wit, zonder rand. */
+@media (max-width: 39.99rem) {
+  .df-kaart { background: var(--ab-kaart, #fff); border-radius: var(--ab-hoek-groot, 12px); padding: 20px; }
+}
+
+/* Kop zoals in het paneel: icoon, titel, korte uitleg, met een lijn eronder. */
+.df-kop { display: flex; align-items: center; gap: 12px; border-bottom: 1px solid var(--utrecht-separator-color, #ccc); padding-bottom: 10px; }
+.df-kop > div { flex: 1; min-width: 0; }
+/* Het merkblok, zoals linksboven in het portaal. */
+.df-merk-blok { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 11px; background: linear-gradient(135deg, var(--ab-blauw, #2f6fd6), var(--ab-teal, #109987)); color: #fff; font-weight: 800; font-size: 14px; letter-spacing: .02em; }
+.df-merk { margin: 0 0 2px; font-size: 0.8125rem; font-weight: 700; letter-spacing: 0.01em; color: var(--ab-blauw-donker, #2358b3); }
+.df-kop .utrecht-heading-2 { margin: 0 0 2px; }
+.df-onder, .df-login .utrecht-paragraph { margin: 0; }
+.df-onder { color: var(--utrecht-paragraph-small-color, #555); }
+.df-verplicht { margin: 0; }
+.df-verplicht .required, .df-login .required { color: var(--utrecht-form-field-error-message-color, #c00); }
+
+/* Inhoud */
+#kc-content { display: flex; flex-direction: column; gap: 14px; }
+#kc-form, #kc-form-wrapper { display: contents; }
+.df-login form { display: flex; flex-direction: column; gap: 14px; margin: 0; }
+.df-veld { display: flex; flex-direction: column; gap: 4px; margin: 0; }
+.df-veld > *, .df-label, .df-invoer { margin: 0; }
+.df-label, .df-invoer { display: contents; }
+.df-login .utrecht-textbox, .df-login .utrecht-textarea, .df-login select { width: 100%; max-inline-size: none; }
+.df-fout { font-size: 0.8125rem; color: var(--utrecht-form-field-error-message-color, #c00); }
+.df-veld:has([aria-invalid="true"]) .utrecht-textbox { border-color: var(--utrecht-form-field-error-message-color, #c00); }
+
+/* Wachtwoord met oog-knop */
+.df-invoergroep { display: flex; }
+.df-invoergroep .utrecht-textbox { flex: 1; min-width: 0; border-start-end-radius: 0; border-end-end-radius: 0; }
+.df-oog-knop {
+  flex: none; width: 44px; display: inline-flex; align-items: center; justify-content: center;
+  border: var(--utrecht-textbox-border-width, 1px) solid var(--utrecht-textbox-border-color, #767676); border-inline-start: 0;
+  border-start-end-radius: var(--utrecht-textbox-border-radius, 0); border-end-end-radius: var(--utrecht-textbox-border-radius, 0);
+  background: var(--utrecht-textbox-background-color, #fff); color: inherit; cursor: pointer; padding: 0;
+}
+.df-oog-knop:focus-visible { outline: 2px solid var(--utrecht-focus-outline-color, var(--df-primair)); outline-offset: -3px; }
+.df-oog {
+  display: block; width: 20px; height: 20px; background: currentColor;
+  -webkit-mask: var(--df-oog-icoon) center / contain no-repeat; mask: var(--df-oog-icoon) center / contain no-repeat;
+  --df-oog-icoon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z'/%3E%3Ccircle cx='12' cy='12' r='3'/%3E%3C/svg%3E");
+}
+.df-oog--dicht {
+  --df-oog-icoon: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M17.9 17.9A10.4 10.4 0 0 1 12 19C5 19 1 12 1 12a18.5 18.5 0 0 1 5.1-5.9M9.9 5.2A9.1 9.1 0 0 1 12 5c7 0 11 7 11 7a18.6 18.6 0 0 1-2.2 3.2M14.1 14.1a3 3 0 1 1-4.2-4.2'/%3E%3Cpath d='M1 1l22 22'/%3E%3C/svg%3E");
+}
+
+/* Opties (onthouden, wachtwoord vergeten) */
+.df-opties, #kc-form-options { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; font-size: 0.8125rem; }
+.df-opties-rij { display: flex; gap: 8px; }
+/* Keycloak zet lege optieblokken neer als onthouden en wachtwoord vergeten uit staan. */
+.df-opties:not(:has(input, a, button)), #kc-form-options:not(:has(input, a, button)), .df-opties-rij:not(:has(*)) { display: none; }
+.df-login .checkbox label { display: inline-flex; align-items: center; gap: 6px; }
+.df-login input[type="checkbox"], .df-login input[type="radio"] { width: 16px; height: 16px; accent-color: var(--df-primair); margin: 0; }
+
+/* Knoppen */
+.df-knoppen, #kc-form-buttons { display: flex; flex-direction: column; gap: 8px; margin: 0; }
+/* De hoofdknop is even breed als zijn tekst, zoals in het paneel; knoppen voor
+   andere manieren van inloggen (later bijvoorbeeld Entra ID) vullen de breedte. */
+.df-login .df-knop-breed, .df-login #kc-login, .df-login #kc-form-buttons .utrecht-button--primary-action { inline-size: 100%; justify-content: center; }
+.df-login input.utrecht-button { font-family: inherit; }
+.df-linkknop { font: inherit; font-size: 0.8125rem; border: 0; padding: 0; background: none; color: var(--utrecht-link-color, var(--df-primair)); text-decoration: underline; cursor: pointer; align-self: flex-start; }
+
+/* Links in de pagina's van Keycloak hebben geen eigen klasse */
+.df-login a { color: var(--utrecht-link-color, var(--df-primair)); }
+.df-login a:hover { color: var(--utrecht-link-hover-color, var(--utrecht-link-color, var(--df-primair))); }
+.df-login a:focus-visible { outline: 2px solid var(--utrecht-focus-outline-color, var(--df-primair)); outline-offset: 2px; }
+
+/* Meldingen: geen icoon, wel de kleur van de soort */
+.df-login .utrecht-alert { margin: 0; }
+.df-login .utrecht-alert__message { margin: 0; }
+
+/* Andere manieren van inloggen en informatie onderaan */
+.df-anders hr { border: 0; border-top: 1px solid var(--utrecht-separator-color, #ccc); margin: 4px 0 10px; }
+.df-anders h2 { font-size: 0.8125rem; font-weight: 600; margin: 0 0 8px; }
+.df-anders-lijst { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.df-info { font-size: 0.8125rem; }
+.df-keuzelijst { display: flex; flex-direction: column; gap: 8px; }
+.df-keuzelijst-item { border: 1px solid var(--utrecht-separator-color, #ccc); border-radius: 4px; padding: 10px 12px; }
+
+/* Voet: taalkeuze en de prototype-regel */
+.df-voet { display: flex; flex-direction: column; gap: 6px; border-top: 1px solid var(--utrecht-separator-color, #ccc); padding-top: 10px; color: var(--utrecht-paragraph-small-color, #555); }
+.df-talen { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.8125rem; }
+.df-talen [aria-current] { font-weight: 600; }
+
+/* --- Herstelcodes en de keuze tussen apps (docs/inloggen-herstel.md) --- */
+.df-login .pf-screen-reader, .df-login .pf-v5-screen-reader {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+}
+.df-herstel-waarschuwing { border-left: 4px solid var(--df-waarschuwing, #b35900); background: var(--df-waarschuwing-vlak, #fff4e5); padding: 10px 12px; border-radius: 4px; margin: 0 0 12px; }
+.df-herstel-waarschuwing .pf-c-alert__icon { display: none; }
+.df-herstel-waarschuwing .pf-c-alert__title { margin: 0 0 4px; font-size: 0.9375rem; }
+.df-herstel-waarschuwing p { margin: 0; font-size: 0.875rem; }
+.df-herstelcodes { margin: 0 0 12px; padding: 10px 12px; list-style: none; columns: 2; column-gap: 16px; background: var(--df-vlak, #f3f3f3); border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.875rem; }
+.df-herstelcodes li { break-inside: avoid; padding: 2px 0; }
+.df-herstelcodes li span { display: inline-block; min-width: 2.2em; color: var(--df-zacht, #5c5c5c); }
+.df-herstel-knoppen { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; }
+.df-herstel-knoppen .pf-c-button { font: inherit; font-size: 0.875rem; font-weight: 600; padding: 6px 12px; border: 1px solid var(--df-primair); border-radius: 6px; background: transparent; color: var(--df-primair); cursor: pointer; }
+.df-herstel-knoppen .pf-c-button i { display: none; }
+.df-opties:has(#kcRecoveryCodesConfirmationCheck) { justify-content: flex-start; align-items: center; font-size: 0.875rem; }
+.df-app-keuze { border: 0; padding: 0; margin: 0 0 12px; }
+.df-app-keuze legend { margin-bottom: 6px; }
+.df-app-keuze .utrecht-form-field--radio { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.df-app-keuze .utrecht-form-field-description { margin: 6px 0 0; font-size: 0.8125rem; }

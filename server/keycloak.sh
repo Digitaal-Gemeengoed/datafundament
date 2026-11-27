@@ -108,6 +108,12 @@ ok "Het portaal mag inlogaccounts aanmaken en de mail voor wachtwoord en authent
 
 # --- Taal, e-mail en 'Wachtwoord vergeten?' -----------------------------------------------
 kc update "realms/$R" -s internationalizationEnabled=true -s 'supportedLocales=["nl","en"]' -s defaultLocale=nl >/dev/null
+# Het inlog- en e-mailthema in de stijl van het portaal (keycloak-thema/datafundament).
+if kc update "realms/$R" -s loginTheme=datafundament -s emailTheme=datafundament >/dev/null 2>&1; then
+  ok "Inlogscherm en e-mails in de stijl van het Datafundament"
+else
+  waarschuw "Het thema 'datafundament' zetten lukte niet; is keycloak-thema/ aangekoppeld (compose.yml)?"
+fi
 SMTP_HOST="$(waarde SMTP_HOST)"
 if [ -n "$SMTP_HOST" ]; then
   U="$(waarde SMTP_GEBRUIKER)"; AF="$(waarde SMTP_AFZENDER)"; T="$(waarde SMTP_TLS)"
