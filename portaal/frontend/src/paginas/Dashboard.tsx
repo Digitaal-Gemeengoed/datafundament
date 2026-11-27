@@ -50,7 +50,7 @@ function Blok({ titel, rechts, children }: { titel: string; rechts?: ReactNode; 
 export function Dashboard({ ik }: { ik: Ik }) {
   const r = new Set(ik.rechten);
   const { data } = useLaden(() => api<Overzicht>("GET", "/api/dashboard"));
-  const platform = useLaden(() => (r.has("platform.view") ? api<{ onderdelen: { naam: string; stand: string; toelichting: string }[]; versheid: { laag: string; stand: string }[] }>("GET", "/api/platform") : Promise.resolve(null)));
+  const platform = useLaden(() => (r.has("platform.view") ? api<{ onderdelen: { naam: string; stand: string; toelichting: string }[]; versheid: { laag: string; stand: string; ritme?: string }[] }>("GET", "/api/platform") : Promise.resolve(null)));
 
   const n = (s: string) => data?.accounts?.find((a) => a.status === s)?.n ?? 0;
   const aandacht: { tekst: ReactNode; naar?: string; ernst: "let-op" | "info" }[] = [];
@@ -66,7 +66,7 @@ export function Dashboard({ ik }: { ik: Ik }) {
     if (o.stand !== "ok") aandacht.push({ tekst: <>{o.naam}: {o.toelichting}</>, naar: "/platform", ernst: "let-op" });
   }
   for (const v of platform.data?.versheid ?? []) {
-    if (v.stand !== "vers") aandacht.push({ tekst: <>{v.laag}: {t(v.stand === "nooit" ? "nooitGeladen" : "verouderd")}</>, naar: "/platform", ernst: "let-op" });
+    if (v.stand !== "vers") aandacht.push({ tekst: <>{v.laag}: {t(v.stand === "nooit" ? "nooitGeladen" : v.ritme === "nacht" ? "verouderdNacht" : "verouderd")}</>, naar: "/platform", ernst: "let-op" });
   }
 
   return (

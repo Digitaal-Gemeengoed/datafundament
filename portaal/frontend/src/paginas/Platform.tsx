@@ -9,7 +9,7 @@ import { relatief, useLaden } from "./gedeeld";
 interface Stand {
   onderdelen: { naam: string; stand: "ok" | "fout"; toelichting: string; ms: number }[];
   runs: { runId: string; jobName: string; status: string; startTime: number | null; endTime: number | null }[] | null;
-  versheid: { laag: string; laatst: number | null; tabellen: number; stand: "vers" | "verouderd" | "nooit" }[];
+  versheid: { laag: string; laatst: number | null; tabellen: number; stand: "vers" | "verouderd" | "nooit"; ritme?: "vijf-minuten" | "nacht" }[];
 }
 
 const RUN: Record<string, "success" | "danger" | "warning" | "neutral"> = { SUCCESS: "success", FAILURE: "danger", CANCELED: "warning", STARTED: "neutral", QUEUED: "neutral" };
@@ -56,7 +56,8 @@ export function Platform() {
                     <TableCell className="ab-mono">{v.laag}</TableCell>
                     <TableCell>{v.tabellen}</TableCell>
                     <TableCell title={v.laatst ? tijd(new Date(v.laatst).toISOString()) : undefined}>{v.laatst ? relatief(new Date(v.laatst).toISOString()) : t("nooit")}</TableCell>
-                    <TableCell><StatusBadge status={v.stand === "vers" ? "success" : "warning"}>{t(v.stand === "vers" ? "vers" : v.stand === "nooit" ? "nooitGeladen" : "verouderd")}</StatusBadge></TableCell>
+                    <TableCell><StatusBadge status={v.stand === "vers" ? "success" : "warning"}>{t(v.stand === "vers" ? "vers" : v.stand === "nooit" ? "nooitGeladen" : v.ritme === "nacht" ? "verouderdNacht" : "verouderd")}</StatusBadge>
+                      {v.ritme === "nacht" && <div className="ab-klein">{t("ritmeNacht")}</div>}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>

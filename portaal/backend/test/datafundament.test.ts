@@ -45,6 +45,7 @@ const nepFetch: typeof fetch = async (invoer, init) => {
       return json({ data: { assetNodes: [
         a(["ruw_brp", "persoon"], "ruw_brp", klok.getTime() - 5 * 60_000),
         a(["ruw_belastingen", "aanslag"], "ruw_belastingen", klok.getTime() - 3 * 3600_000),
+        a(["ruw_mor", "melding"], "ruw_mor", klok.getTime() - 45 * 60_000),
         a(["ruw_zaken", "zaken"], "ruw_zaken", null),
         a(["dataproduct", "testpersonen_per_buurt"], "dataproduct", klok.getTime()),
       ] } });
@@ -114,13 +115,15 @@ test("platformstatus: onderdelen, runs en versheid per bron; alleen met platform
   const j = r.json();
   assert.deepEqual(j.onderdelen.map((o: { naam: string; stand: string }) => `${o.naam}:${o.stand}`), ["Dagster:ok", "Lakekeeper:ok", "Trino:ok", "Garage:fout"]);
   assert.equal(j.runs[0].jobName, "ingestie");
-  assert.deepEqual(j.versheid.map((v: { laag: string; stand: string }) => `${v.laag}:${v.stand}`), ["ruw_belastingen:verouderd", "ruw_brp:vers", "ruw_zaken:nooit"]);
+  assert.deepEqual(j.versheid.map((v: { laag: string; stand: string }) => `${v.laag}:${v.stand}`), ["ruw_belastingen:vers", "ruw_brp:vers", "ruw_mor:verouderd", "ruw_zaken:nooit"]);
+  // Eén bestand per nacht: drie uur oud is vers; vijf minuten-bronnen na een half uur niet meer.
+  assert.equal(j.versheid[0].ritme, "nacht");
 });
 
 test("dataproducten: alles uit Dagster, per laag", async () => {
   const j = (await vraag(app, await sessie(id.eng), "GET", "/api/dataproducten")).json();
   assert.deepEqual(j.map((a: { sleutel: string; laag: string }) => `${a.laag}:${a.sleutel}`), [
-    "dataproduct:dataproduct/testpersonen_per_buurt", "ruw:ruw_belastingen/aanslag", "ruw:ruw_brp/persoon", "ruw:ruw_zaken/zaken",
+    "dataproduct:dataproduct/testpersonen_per_buurt", "ruw:ruw_belastingen/aanslag", "ruw:ruw_brp/persoon", "ruw:ruw_mor/melding", "ruw:ruw_zaken/zaken",
   ]);
 });
 

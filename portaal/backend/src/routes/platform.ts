@@ -1,8 +1,19 @@
 import type { FastifyInstance } from "fastify";
 import { vereis } from "../toegang.js";
 
-/** Een ruwe laag die langer dan dit niet is bijgewerkt, staat op "verouderd" (de ingestie draait elke 5 minuten). */
+/**
+ * Wanneer een ruwe laag "verouderd" is. De ingestie draait elke 5 minuten, dus
+ * meestal na een half uur zonder update. Een bron die één bestand per nacht
+ * aanlevert (de export van de belastingen, DF-ADR-014) pas na 26 uur: een dag
+ * en wat speling.
+ */
 const VERS_MINUTEN = 30;
+const NACHT_MINUTEN = 26 * 60;
+const PER_NACHT = (process.env.VERSHEID_PER_NACHT ?? "ruw_belastingen").split(",").map((x) => x.trim()).filter(Boolean);
+export function norm(laag: string): { minuten: number; ritme: "vijf-minuten" | "nacht" } {
+  const bron = laag.replace(/_stand$/, "");
+  return PER_NACHT.includes(bron) ? { minuten: NACHT_MINUTEN, ritme: "nacht" } : { minuten: VERS_MINUTEN, ritme: "vijf-minuten" };
+}
 
 export async function platformRoutes(app: FastifyInstance): Promise<void> {
   const d = app.diensten;
@@ -29,7 +40,10 @@ export async function platformRoutes(app: FastifyInstance): Promise<void> {
       runs,
       versheid: [...bronnen.values()]
         .sort((x, y) => x.laag.localeCompare(y.laag))
-        .map((b) => ({ ...b, stand: b.laatst === null ? "nooit" : nu - b.laatst > VERS_MINUTEN * 60_000 ? "verouderd" : "vers" })),
+        .map((b) => {
+          const n = norm(b.laag);
+          return { ...b, ritme: n.ritme, stand: b.laatst === null ? "nooit" : nu - b.laatst > n.minuten * 60_000 ? "verouderd" : "vers" };
+        }),
     };
   });
 }

@@ -64,6 +64,8 @@ const T = {
   werkt: ["werkt", "up"],
   storing: ["storing", "down"],
   verouderd: ["niet bijgewerkt in het afgelopen half uur", "not updated in the last half hour"],
+  verouderdNacht: ["vannacht niet bijgewerkt", "not updated last night"],
+  ritmeNacht: ["één bestand per nacht", "one file per night"],
   nooitGeladen: ["nog nooit geladen", "never loaded"],
   vers: ["vers", "fresh"],
   onderdelen: ["Onderdelen", "Components"],
