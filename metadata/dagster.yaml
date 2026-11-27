@@ -1,0 +1,15 @@
+# Dagster: de jobs, hun runs en de lineage van bron tot dataproduct (DF-ADR-007).
+source:
+  type: dagster
+  serviceName: dagster
+  serviceConnection:
+    config:
+      type: Dagster
+      host: http://dagster-webserver:3000
+  sourceConfig:
+    config:
+      type: PipelineMetadata
+      includeLineage: true
+sink:
+  type: metadata-rest
+  config: {}

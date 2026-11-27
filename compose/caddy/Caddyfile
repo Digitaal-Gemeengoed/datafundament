@@ -52,6 +52,14 @@ admin.{$DOMEIN} {
 	reverse_proxy portaal:4300
 }
 
+# OpenMetadata: de catalogus (DF-ADR-007). Eigen inlog via Keycloak; geen
+# wachtwoord van Caddy ervoor, dat zou de terugkeer van Keycloak blokkeren.
+metadata.{$DOMEIN} {
+	header -Server
+	header Strict-Transport-Security "max-age=31536000"
+	reverse_proxy openmetadata:8585
+}
+
 # Keycloak: alleen het inloggen. Het beheerscherm is van buiten dicht (SSH-tunnel).
 id.{$DOMEIN} {
 	header -Server

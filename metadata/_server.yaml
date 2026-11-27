@@ -1,0 +1,9 @@
+# Gedeeld door alle workflows hieronder: waar OpenMetadata staat en met welk token.
+# Niet zelf te draaien; orkestratie/metadata.py voegt dit toe.
+workflowConfig:
+  loggerLevel: INFO
+  openMetadataServerConfig:
+    hostPort: http://openmetadata:8585/api
+    authProvider: openmetadata
+    securityConfig:
+      jwtToken: ${OPENMETADATA_BOT_TOKEN}

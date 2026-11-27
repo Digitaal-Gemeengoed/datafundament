@@ -9,11 +9,13 @@
 # Doet:
 #   - realm 'datafundament', met brute-force-detectie;
 #   - een vertrouwelijke client 'df-portaal' (authorization code + PKCE);
+#   - een vertrouwelijke client 'df-metadata' voor OpenMetadata (DF-ADR-007);
 #   - de AMR-mapper, zodat het id_token meldt dat er een tweede factor was;
 #   - op de OTP-stap van de inlogflow de referentiewaarde 'otp';
 #   - op verzoek een gebruiker voor jezelf (e-mail geverifieerd; bij de eerste
 #     inlog een eigen wachtwoord en een authenticator-app);
-#   - zet het client-geheim en de uitgever in compose/.env voor het portaal.
+#   - zet de client-geheimen en de uitgever in compose/.env, en de beheerder
+#     van OpenMetadata (het deel vóór de @ van jouw e-mailadres).
 
 HIER="$(cd "$(dirname "$0")" && pwd)"
 # shellcheck source=lib.sh
@@ -76,6 +78,26 @@ else
   ok "Client df-portaal bestaat al; adressen gezet op $PORTAAL"
 fi
 
+# --- Client voor OpenMetadata ----------------------------------------------------------
+METADATA="https://metadata.$DOMEIN"
+OMID="$(kc get clients -r $R -q clientId=df-metadata --fields id 2>/dev/null | jq -r '.[0].id // empty')"
+if [ -z "$OMID" ]; then
+  kc create clients -r $R \
+    -s clientId=df-metadata -s name="OpenMetadata" -s enabled=true \
+    -s protocol=openid-connect -s publicClient=false -s clientAuthenticatorType=client-secret \
+    -s secret="$(geheim 32)" \
+    -s standardFlowEnabled=true -s implicitFlowEnabled=false \
+    -s directAccessGrantsEnabled=false -s serviceAccountsEnabled=false \
+    -s "redirectUris=[\"$METADATA/callback\"]" -s "webOrigins=[\"$METADATA\"]" -s "rootUrl=$METADATA" \
+    -s "attributes.\"post.logout.redirect.uris\"=$METADATA/*" >/dev/null
+  OMID="$(kc get clients -r $R -q clientId=df-metadata --fields id | jq -r '.[0].id')"
+  ok "Client df-metadata aangemaakt"
+else
+  kc update "clients/$OMID" -r $R \
+    -s "redirectUris=[\"$METADATA/callback\"]" -s "webOrigins=[\"$METADATA\"]" -s "rootUrl=$METADATA" >/dev/null
+  ok "Client df-metadata bestaat al; adressen gezet op $METADATA"
+fi
+
 # --- AMR-mapper ----------------------------------------------------------------------
 if kc get "clients/$ID/protocol-mappers/models" -r $R | jq -e '.[] | select(.protocolMapper == "oidc-amr-mapper")' >/dev/null; then
   ok "AMR-mapper staat er al"
@@ -129,12 +151,20 @@ if [ -n "$EMAIL" ]; then
     echo "      Bij de eerste inlog kies je een eigen wachtwoord en koppel je een authenticator-app."
   fi
   echo "      Maak in het portaal (via /emergency) een account met precies dit e-mailadres."
+  # De eerste beheerder van OpenMetadata: OpenMetadata kent je als het deel vóór de @.
+  if [ -z "$(waarde OM_BEHEERDER)" ]; then
+    zet OM_BEHEERDER "${EMAIL%@*}"
+    zet OM_DOMEIN "${EMAIL#*@}"
+    ok "Beheerder van OpenMetadata: ${EMAIL%@*}"
+  fi
 fi
 
 # --- Het portaal koppelen ------------------------------------------------------------------
 SECRET="$(kc get "clients/$ID/client-secret" -r $R | jq -r .value)"
+OMSECRET="$(kc get "clients/$OMID/client-secret" -r $R | jq -r .value)"
 docker compose exec -T keycloak rm -f /tmp/df-kcadm.config
 zet PORTAAL_OIDC_ISSUER "https://id.$DOMEIN/realms/$R"
 zet PORTAAL_OIDC_GEHEIM "$SECRET"
-docker compose up -d portaal-migreer portaal >/dev/null
-ok "Het portaal logt nu in via Keycloak (geheim en uitgever staan in compose/.env)"
+zet OM_OIDC_GEHEIM "$OMSECRET"
+docker compose up -d portaal-migreer portaal openmetadata >/dev/null
+ok "Het portaal en OpenMetadata loggen nu in via Keycloak (geheimen en uitgever staan in compose/.env)"

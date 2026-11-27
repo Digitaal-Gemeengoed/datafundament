@@ -182,6 +182,29 @@ ssh -L 8088:127.0.0.1:8088 beheer@207.180.253.52
 
 Ga daarna naar `http://localhost:8088/admin` (gebruiker `beheer`; het wachtwoord staat als `KC_BEHEERDER_WACHTWOORD` in `compose/.env`).
 
+## 9. OpenMetadata
+
+Het installatiescript zet OpenMetadata al neer, op `https://metadata.datafundament.haarlem.dev`. Het doet daarbij:
+
+- eigen sleutels maken;
+- de database aanmaken;
+- `vm.max_map_count` zetten voor OpenSearch;
+- de client in Keycloak aanmaken.
+
+De beheerder ben jij: de Keycloak-gebruiker uit stap 8, met het deel vóór de @ als naam.
+
+Eén keer, na je eerste inlog op OpenMetadata:
+
+1. Ga naar Settings → Bots → **ingestion-bot** en kopieer het token.
+2. Op dfc:
+   ```
+   sudo /opt/datafundament/server/metadata-token.sh
+   ```
+
+Daarna werkt Dagster OpenMetadata bij na elke geslaagde keten, hoogstens één keer per uur (job `metadata`). Bijgewerkt worden de catalogus uit Trino, de beschrijvingen, lineage en tests van dbt, en de jobs en runs uit Dagster. Wil je niet wachten, start de job dan zelf in Dagster.
+
+Kom je bij de eerste inlog niet als beheerder binnen? Kijk dan of `OM_BEHEERDER` in `compose/.env` gelijk is aan het deel vóór de @ van je e-mailadres. Daarna: `sudo docker compose -f /opt/datafundament/compose/compose.yml up -d openmetadata`.
+
 ## Daarna
 
 - **DNS:** het domein is `datafundament.haarlem.dev`. Twee A-records, beide naar 207.180.253.52 (dfc):
@@ -189,4 +212,4 @@ Ga daarna naar `http://localhost:8088/admin` (gebruiker `beheer`; het wachtwoord
   - `*.datafundament.haarlem.dev`
 
   Caddy haalt per naam een certificaat op. De namen: `datafundament.` (startpagina, later het portaal), `dagster.`, `metadata.` (OpenMetadata), `catalogus.` (Lakekeeper), `trino.` en `id.` (Keycloak). dfw krijgt geen publieke naam.
-- **Volgt:** dbt (uniforme laag en dataproducten), OpenMetadata, Keycloak.
+- **Volgt:** Trino via Keycloak, met rechten per kolom.

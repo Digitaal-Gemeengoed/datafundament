@@ -42,6 +42,8 @@ export interface Config {
    */
   koppelingen: {
     dagster: string; dagsterLocatie: string; lakekeeper: string; trino: string; garage: string;
+    /** OpenMetadata, de catalogus (DF-ADR-007); null als het er niet is. */
+    openmetadata: string | null;
     /**
      * De kluis: OpenBao op dfw, dat de HMAC van een BSN berekent met de sleutel
      * kluis-bsn, dezelfde als bij de ingestie. Het portaal ziet de sleutel nooit en
@@ -94,6 +96,7 @@ export function leesConfig(env: NodeJS.ProcessEnv = process.env): Config {
       lakekeeper: (env.LAKEKEEPER_URL ?? "http://lakekeeper:8181").replace(/\/$/, ""),
       trino: (env.TRINO_URL ?? "http://trino:8080").replace(/\/$/, ""),
       garage: (env.GARAGE_URL ?? "http://garage:3903").replace(/\/$/, ""),
+      openmetadata: env.OPENMETADATA_URL ? env.OPENMETADATA_URL.replace(/\/$/, "") : null,
       kluis: env.KLUIS_BAO_ADRES
         ? { adres: env.KLUIS_BAO_ADRES.replace(/\/$/, ""), token: geheim(env, "KLUIS_BAO_TOKEN", 20) }
         : null,
