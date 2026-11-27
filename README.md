@@ -57,6 +57,6 @@ Na de eerste week: OpenMetadata volledig, Keycloak en regels in Trino (maskering
 
 ## Licentie
 
-Zie `LICENSE`.
+EUPL-1.2, zie `LICENSE`. Het portaal (`portaal/`) stond al onder EUPL-1.2.
 
 Gemaakt binnen Digitaal Gemeengoed door Erik Hoekstra, met Fabien, en met assistentie van Claude (Anthropic). Zie [DF-ADR-011](docs/adr/DF-ADR-011-ai-als-versneller.md).
