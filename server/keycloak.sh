@@ -61,9 +61,14 @@ if kc get "realms/$R" >/dev/null 2>&1; then
 else
   kc create realms -s realm=$R -s enabled=true -s displayName="Datafundament" \
     -s bruteForceProtected=true -s failureFactor=10 -s loginWithEmailAllowed=true \
-    -s duplicateEmailsAllowed=false -s 'otpPolicyType=totp' -s 'otpPolicyPeriod=30' >/dev/null
+    -s duplicateEmailsAllowed=false >/dev/null
   ok "Realm $R aangemaakt (brute-force-detectie aan)"
 fi
+# Het hele OTP-beleid, altijd. Een realm met alleen otpPolicyType en -Period krijgt
+# geen algoritme, en dan faalt het koppelen van een app ("null algorithm name").
+kc update "realms/$R" -s otpPolicyType=totp -s otpPolicyAlgorithm=HmacSHA1 -s otpPolicyDigits=6 \
+  -s otpPolicyPeriod=30 -s otpPolicyLookAheadWindow=1 -s otpPolicyInitialCounter=0 -s otpPolicyCodeReusable=false >/dev/null
+ok "OTP-beleid: TOTP, SHA1, 6 cijfers, 30 seconden (werkt met elke authenticator-app)"
 
 # --- Client ------------------------------------------------------------------------
 ID="$(kc get clients -r $R -q clientId=df-portaal --fields id 2>/dev/null | jq -r '.[0].id // empty')"
