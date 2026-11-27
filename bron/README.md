@@ -32,10 +32,10 @@ Zoals een BRP-systeem het opslaat: per categorie van het LO BRP een tabel, per r
 
 | Schema | Tabellen | dfc krijgt het via |
 |---|---|---|
-| `bag` | woonplaats, openbare_ruimte, nummeraanduiding, pand, verblijfsobject | de database (CDC-light) |
-| `woz` | object, waarde, belanghebbende (met begin- en einddatum) | de database |
-| `mor` | melding, status | de database |
-| `sociaal` | wmo_voorziening, jeugdhulp_traject, participatiewet_uitkering | de database |
+| `bag` | woonplaats, openbare_ruimte, nummeraanduiding, pand, verblijfsobject | de database (CDC) |
+| `woz` | object, waarde, belanghebbende (met begin- en einddatum) | de database (CDC) |
+| `mor` | melding, status | de database (CDC) |
+| `sociaal` | wmo_voorziening, jeugdhulp_traject, participatiewet_uitkering | de database (CDC) |
 | `zaken` | zaaktype, zaak, status | de **Zaken-API** op poort 8000 |
 | `belastingen` | aanslag | een **nachtelijke export** naar de bucket `landing` op dfc |
 
@@ -140,5 +140,6 @@ Elke mutatie is één transactie, zoals een BRP-systeem die zou doen.
 - `zaken_api`: alleen lezen in het schema `zaken`, alleen vanuit het compose-netwerk (de Zaken-API).
 - De Zaken-API (poort 8000) is alleen bereikbaar voor dfc (10.67.0.1), met een JWT.
 - De kluis (OpenBao, poort 8200) is alleen bereikbaar voor dfc, met een token dat alleen een HMAC mag laten berekenen.
-- Publicatie `datafundament`: alle tabellen in `brp`, `bag`, `woz`, `mor` en `sociaal`, ook tabellen die later bijkomen. Niet `zaken` en `belastingen`: die komen via de API en de export.
-- Een replicatieslot dat niemand leest, houdt hoogstens 2 GB WAL vast (`max_slot_wal_keep_size`).
+- Publicaties `df_brp`, `df_bag`, `df_woz`, `df_mor` en `df_sociaal` (`werkbank/publicaties.py`): per tabel de kolommen die mee mogen, dus zonder namen en A-nummers. Alleen INSERT, UPDATE en DELETE, geen TRUNCATE. Niet `zaken` en `belastingen`: die komen via de API en de export. `laden`, `synthetisch` en `kolom-erbij` werken de publicaties zelf bij; na een andere schemawijziging: `sudo ./bron.sh publicaties`. Een nieuwe kolom komt pas door als de publicatie hem noemt.
+- De slots maakt dfc zelf aan, twee per bron (`df_ruw_<bron>` en `df_ruw_<bron>_stand`). `sudo ./bron.sh status` toont hoe ver elk slot is.
+- Een replicatieslot dat niemand leest, houdt hoogstens 2 GB WAL vast (`max_slot_wal_keep_size`). Loopt een slot verder achter, dan vervalt het; dfc maakt het dan opnieuw en laadt eerst een keer incrementeel.

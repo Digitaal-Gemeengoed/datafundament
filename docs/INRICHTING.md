@@ -132,7 +132,10 @@ Eerst op **dfw**: de kluis (OpenBao) starten en inrichten.
 cd /opt/datafundament/bron
 sudo ./bron.sh start               # poortfilter bijwerken, de kluis starten
 sudo ./bron.sh kluis-inrichten     # één keer
+sudo ./bron.sh publicaties         # de publicaties voor CDC, per tabel met kolommen (DF-ADR-006)
 ```
+
+Neemt `start` de nieuwe instelling `max_replication_slots=20` niet over, herstart dan de database: `sudo docker compose up -d --force-recreate db`.
 
 `kluis-inrichten` toont één keer drie dingen. Zet ze in je wachtwoordmanager, buiten de server:
 
@@ -165,7 +168,7 @@ Daarna:
 3. Maak een groep met superadmin en een account met het e-mailadres van je Keycloak-gebruiker.
 4. Daarna log je in via Keycloak.
 
-**Eén keer bij de overstap naar pseudoniemen (DF-ADR-015).** De ruwe lagen van daarvoor bevatten BSN's en namen. Leeg ze; de ingestie laadt daarna alles opnieuw, gepseudonimiseerd:
+**Eén keer bij de overstap naar pseudoniemen (DF-ADR-015).** De ruwe lagen van daarvoor bevatten BSN's en namen. Leeg ze; de ingestie laadt daarna alles opnieuw, gepseudonimiseerd. Dit gooit ook de replicatieslots weg; de ingestie maakt ze opnieuw en gaat dan verder met echte CDC:
 
 ```
 sudo docker compose -f /opt/datafundament/compose/compose.yml exec werk python -m beheer.opnieuw_laden --ja

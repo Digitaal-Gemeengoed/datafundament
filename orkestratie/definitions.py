@@ -62,10 +62,13 @@ def ingestie(bron, laag, omschrijving):
 
     @multi_asset(name=f"laad_{laag}", specs=specs, can_subset=False)
     def _laad(context: AssetExecutionContext):
-        rijen = bronnen.laad(bron, laag)
-        context.log.info(f"{laag}: {sum(rijen.values())} rijen geladen")
+        rijen, verslag = bronnen.laad(bron, laag)
+        context.log.info(f"{laag}: {sum(rijen.values())} rijen geladen; CDC: {verslag}")
+        if verslag.get("toast"):
+            context.log.warning(f"{verslag['toast']} ongewijzigde TOAST-waarden niet meegekomen (zie ingestie/cdc.py)")
         for t in bronnen.alle_tabellen(bron):
-            yield MaterializeResult(asset_key=[laag, t], metadata={"rijen_geladen": rijen[t]})
+            yield MaterializeResult(asset_key=[laag, t], metadata={"rijen_geladen": rijen.get(t, 0), "cdc": verslag["slot"],
+                                                                   **({"verwijderd": verslag["verwijderd"]} if "verwijderd" in verslag else {})})
 
     return _laad
 

@@ -13,7 +13,9 @@ Per bron twee lagen (DF-ADR-005):
   ruw_<bron>        insert-only: elke versie van een rij wordt toegevoegd
   ruw_<bron>_stand  upsert op id: de huidige stand van de bron
 
-dlt laadt incrementeel op gewijzigd_op (DF-ADR-006). Tabellen zonder tijdstip
+De databasebronnen komen binnen met echte CDC: de logische replicatie van
+PostgreSQL, met een slot per laag (ingestie/cdc.py, DF-ADR-006). De eerste keer,
+en met CDC=uit, laadt dlt incrementeel op gewijzigd_op. Tabellen zonder tijdstip
 (zoals de codetabel) worden steeds helemaal vervangen.
 
 Configuratie komt uit de omgeving: DLT_WACHTWOORD en BRON_HOST voor de bron,
@@ -25,6 +27,8 @@ import os
 
 import dlt
 from dlt.sources.sql_database import sql_database
+
+from ingestie import iceberg_upsert  # noqa: F401  pylint: disable=unused-import
 
 BRONNEN = {
     "brp": dict(
@@ -80,7 +84,13 @@ def alle_tabellen(bron):
 
 def bron_url():
     return (f"postgresql+psycopg2://dlt_lezer:{os.environ['DLT_WACHTWOORD']}"
-            f"@{os.environ.get('BRON_HOST', '10.67.0.2')}:5432/bron")
+            f"@{os.environ.get('BRON_HOST', '10.67.0.2')}:{os.environ.get('BRON_POORT', '5432')}/bron")
+
+
+def bron_dsn():
+    return (f"host={os.environ.get('BRON_HOST', '10.67.0.2')} port={os.environ.get('BRON_POORT', '5432')} "
+            f"dbname=bron user=dlt_lezer "
+            f"password={os.environ['DLT_WACHTWOORD']}")
 
 
 def pseudonimiseer(src, bron, kluis=None):
@@ -112,24 +122,73 @@ def _source(bron, laag):
     b = BRONNEN[bron]
     from ingestie import pseudoniem  # pylint: disable=import-outside-toplevel
     src = sql_database(bron_url(), schema=bron, table_names=alle_tabellen(bron),
-                       table_adapter_callback=pseudoniem.tabel_adapter(bron),
+                       table_adapter_callback=alles_mag_leeg(pseudoniem.tabel_adapter(bron)),
                        query_adapter_callback=pseudoniem.query_adapter(bron))
+    from ingestie import cdc  # pylint: disable=import-outside-toplevel
     for t in b["tabellen"]:
         getattr(src, t).apply_hints(
             primary_key="id",
             incremental=dlt.sources.incremental("gewijzigd_op"),
             write_disposition=lagen(bron)[laag],
+            columns=cdc.KOLOMMEN if laag == f"ruw_{bron}" else cdc.KOLOMMEN[1:],
         )
     for t, sleutel in b.get("vervangen", {}).items():
         getattr(src, t).apply_hints(primary_key=sleutel, write_disposition="replace")
     return src
 
 
-def laad(bron, laag):
-    """Laadt één laag van één bron. Geeft het aantal geladen rijen per tabel terug."""
-    pijp = dlt.pipeline(f"{bron}_{laag}", destination="filesystem", dataset_name=laag)
-    info = pijp.run(source(bron, laag), table_format="iceberg")
+def pijplijn(bron, laag):
+    return dlt.pipeline(f"{bron}_{laag}", destination="filesystem", dataset_name=laag)
+
+
+def cdc_aan(bron):
+    return BRONNEN[bron].get("soort", "database") == "database" and os.environ.get("CDC", "aan") != "uit"
+
+
+def alles_mag_leeg(adapter):
+    """Alle kolommen behalve de sleutel mogen leeg zijn: een verwijdering via CDC
+    komt binnen met alleen het id (DF-ADR-006)."""
+    def aanpassen(tabel):
+        tabel = adapter(tabel)
+        for kolom in tabel.columns:
+            if not kolom.primary_key:
+                kolom.nullable = True
+        return tabel
+    return aanpassen
+
+
+def laad(bron, laag, kluis=None):
+    """Laadt één laag van één bron. Geeft (rijen per tabel, verslag) terug."""
+    if not cdc_aan(bron):
+        return laad_incrementeel(bron, laag, kluis), {"slot": "uit"}
+    import psycopg2  # pylint: disable=import-outside-toplevel
+    from ingestie import cdc, pseudoniem  # pylint: disable=import-outside-toplevel
+    b = BRONNEN[bron]
+    k = kluis or (pseudoniem.Kluis() if bron in pseudoniem.REGELS else None)
+    con = psycopg2.connect(bron_dsn())
+    try:
+        rijen, verslag = cdc.laad(
+            bron, laag, con, pijplijn(bron, laag),
+            pseudonimiseer=lambda r: pseudonimiseer(r, bron, k),
+            tabellen=b["tabellen"],
+            incrementeel=lambda: laad_incrementeel(bron, laag, k))
+    finally:
+        con.close()
+    # De vervangen tabellen (codetabel) zitten niet in de replicatie: die steeds helemaal.
+    if b.get("vervangen") and verslag["slot"] != "aangemaakt":
+        rijen.update(laad_incrementeel(bron, laag, k, alleen_vervangen=True))
+    return rijen, verslag
+
+
+def laad_incrementeel(bron, laag, kluis=None, alleen_vervangen=False):
+    """Incrementeel op gewijzigd_op (of uit de API of het bestand). Rijen per tabel."""
+    pijp = pijplijn(bron, laag)
+    src = source(bron, laag, kluis)
+    if alleen_vervangen:
+        src = src.with_resources(*BRONNEN[bron]["vervangen"])
+    info = pijp.run(src, table_format="iceberg")
     info.raise_on_failed_jobs()
     norm = pijp.last_trace.last_normalize_info
     rijen = norm.row_counts if norm else {}
-    return {t: rijen.get(t, 0) for t in alle_tabellen(bron)}
+    namen = list(BRONNEN[bron]["vervangen"]) if alleen_vervangen else alle_tabellen(bron)
+    return {t: rijen.get(t, 0) for t in namen}
