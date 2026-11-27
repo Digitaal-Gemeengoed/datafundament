@@ -206,8 +206,11 @@ docker compose up -d --remove-orphans
 docker compose restart caddy trino >/dev/null
 ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
 
+# Keycloak: de eerste keer met de vraag om een gebruiker, daarna alleen de instellingen.
 if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ] || [ -z "$(waarde TRINO_OIDC_GEHEIM)" ]; then
   "$DF_REPO/server/keycloak.sh"
+else
+  "$DF_REPO/server/keycloak.sh" --stil
 fi
 
 D="$(waarde DOMEIN)"

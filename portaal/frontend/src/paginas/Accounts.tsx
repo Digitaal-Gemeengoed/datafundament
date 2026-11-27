@@ -140,8 +140,8 @@ export function NieuwAccount() {
   const verstuur = async (e: FormEvent) => {
     e.preventDefault();
     try {
-      const { id } = await api<{ id: string }>("POST", "/api/accounts", v);
-      ga(`/accounts/${id}?nieuw=1`);
+      const { id, inlogmail } = await api<{ id: string; inlogmail?: string }>("POST", "/api/accounts", v);
+      ga(`/accounts/${id}?nieuw=${inlogmail ?? "uit"}`);
     } catch (x) {
       zetM({ soort: "fout", tekst: foutTekst(x) });
     }
@@ -313,12 +313,62 @@ interface AccountDetailData {
   id: string; email: string; naam: string; status: string; hoofdaccount: boolean; niveau: number; taal?: "nl" | "en"; beheerbaar: boolean; laatst_actief: string | null;
   groepen: { id: string; naam: string; niveau: number }[];
   actieveSessies: number;
+  /** Het inlogaccount in Keycloak; null als het portaal dat niet beheert. */
+  inlog: null | { fout: string } | { bestaat: false } | { bestaat: true; actief: boolean; openStappen: string[]; authenticator: boolean };
   wijzigingen: { id: string; status: string; reden: string; ingang: string; uitgevoerd: string | null; door: string; geannuleerd: string | null; reden_annulering: string | null; geannuleerd_door: string | null }[];
+}
+
+/**
+ * Het inlogaccount in Keycloak: wat de gebruiker nog moet instellen, en een mail van
+ * Keycloak om het (opnieuw) te doen. Het portaal ziet of zet nooit een wachtwoord.
+ */
+function Inloggen({ id, inlog, kan, klaar }: { id: string; inlog: NonNullable<AccountDetailData["inlog"]>; kan: boolean; klaar: (m: Melding) => void }) {
+  const [wat, zetWat] = useState("beide");
+  const [reden, zetReden] = useState("");
+  let stand: string;
+  if ("fout" in inlog) stand = `${t("keycloakFout")}: ${inlog.fout}`;
+  else if (!inlog.bestaat) stand = t("inlogOntbreekt");
+  else if (!inlog.actief) stand = t("inlogUit");
+  else if (inlog.openStappen.length) stand = `${t("inlogWacht")}: ${inlog.openStappen.map((s) => t(s === "wachtwoord" ? "stapWachtwoord" : "stapAuthenticator")).join(", ")}`;
+  else stand = inlog.authenticator ? t("inlogKlaar") : t("inlogGeenApp");
+  const verstuur = async (e: FormEvent) => {
+    e.preventDefault();
+    try {
+      const r = await api<{ wat: string[]; nieuw: boolean }>("POST", `/api/accounts/${id}/inlogmail`, { wat: wat === "beide" ? ["wachtwoord", "authenticator"] : [wat], reden });
+      zetReden("");
+      klaar({ soort: "ok", tekst: r.nieuw ? t("inlogmailNieuw") : t("inlogmailVerstuurd") });
+    } catch (x) {
+      klaar({ soort: "fout", tekst: foutTekst(x) });
+    }
+  };
+  return (
+    <section className="ab-kaart ab-blok">
+      <Heading2>{t("inloggenKeycloak")}</Heading2>
+      <Paragraph>{stand}</Paragraph>
+      {kan && !("fout" in inlog) && (
+        <form className="ab-blok" onSubmit={verstuur}>
+          <Paragraph className="ab-klein">{t("inlogmailUitleg")}</Paragraph>
+          <FormField label={<FormLabel htmlFor="i-wat">{t("inlogmailWat")}</FormLabel>}>
+            <Select id="i-wat" value={wat} onChange={(e) => zetWat(e.target.value)}>
+              <SelectOption value="beide">{t("inlogBeide")}</SelectOption>
+              <SelectOption value="wachtwoord">{t("inlogWachtwoord")}</SelectOption>
+              <SelectOption value="authenticator">{t("inlogAuthenticator")}</SelectOption>
+            </Select>
+          </FormField>
+          <RedenVeld id="i-reden" waarde={reden} zet={zetReden} />
+          <div><SecondaryActionButton type="submit">{t("inlogmailKnop")}</SecondaryActionButton></div>
+        </form>
+      )}
+    </section>
+  );
 }
 
 export function AccountDetail({ ik, id }: { ik: Ik; id: string }) {
   const a = useLaden(() => api<AccountDetailData>("GET", `/api/accounts/${id}`));
-  const [m, zetM] = useState<Melding>(new URLSearchParams(location.search).get("nieuw") ? { soort: "ok", tekst: t("accountAangemaakt") } : null);
+  const nieuw = new URLSearchParams(location.search).get("nieuw");
+  const [m, zetM] = useState<Melding>(nieuw
+    ? nieuw === "mislukt" ? { soort: "fout", tekst: t("accountAangemaaktZonderMail") } : { soort: "ok", tekst: t(nieuw === "verstuurd" ? "accountAangemaaktMetMail" : "accountAangemaakt") }
+    : null);
   const [status, zetStatus] = useState({ status: "geblokkeerd", ingang: "", reden: "" });
   const [groepen, zetGroepen] = useState<string[] | null>(null);
   const [groepReden, zetGroepReden] = useState("");
@@ -363,6 +413,7 @@ export function AccountDetail({ ik, id }: { ik: Ik; id: string }) {
         </dl>
       </section>
       <MeldingVak m={m} />
+      {d.inlog && <Inloggen id={id} inlog={d.inlog} kan={!!kan} klaar={(x) => { zetM(x); a.herlaad(); scrollTo({ top: 0, behavior: "smooth" }); }} />}
       {!kan && <Paragraph className="ab-klein">{t("nietBeheerbaar")}</Paragraph>}
       {kan && (
         <div className="ab-twee">

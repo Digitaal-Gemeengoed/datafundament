@@ -4,7 +4,9 @@
 # Mag vaker worden gestart; wat er al is, blijft staan. Naar het voorbeeld van
 # server/keycloak-beheer.sh in oa-uitrol.
 #
-#   sudo /opt/datafundament/server/keycloak.sh
+#   sudo /opt/datafundament/server/keycloak.sh          (vraagt of je een gebruiker wilt)
+#   sudo /opt/datafundament/server/keycloak.sh --stil   (alleen de instellingen; zo roept
+#                                                        installeer-platform.sh het aan)
 #
 # Doet:
 #   - realm 'datafundament', met brute-force-detectie;
@@ -16,6 +18,11 @@
 #   - op de OTP-stap van de inlogflow de referentiewaarde 'otp';
 #   - op verzoek een gebruiker voor jezelf (e-mail geverifieerd; bij de eerste
 #     inlog een eigen wachtwoord en een authenticator-app);
+#   - het service-account van df-portaal (view-users, manage-users): het portaal
+#     maakt inlogaccounts aan en laat Keycloak de mail voor wachtwoord en
+#     authenticator versturen (uitnodiging, herstel);
+#   - Nederlands als taal; met SMTP_* in compose/.env ook e-mail voor Keycloak en
+#     'Wachtwoord vergeten?' op de inlogpagina, die ook de QR-code opnieuw toont;
 #   - zet de client-geheimen en de uitgever in compose/.env, en de beheerder
 #     van OpenMetadata (het deel vóór de @ van jouw e-mailadres).
 
@@ -78,6 +85,51 @@ else
     -s "redirectUris=[\"$PORTAAL/api/auth/terug\"]" -s "webOrigins=[\"$PORTAAL\"]" -s "rootUrl=$PORTAAL" \
     -s "attributes.\"post.logout.redirect.uris\"=$PORTAAL/" >/dev/null
   ok "Client df-portaal bestaat al; adressen gezet op $PORTAAL"
+fi
+
+# --- Het portaal beheert inlogaccounts -----------------------------------------------------
+# Service-account op df-portaal met alleen view-users en manage-users, en de scope
+# kc-admin-api (vanaf Keycloak 26.8.2 vereist voor de beheer-API). Naar oa-uitrol.
+kc update "clients/$ID" -r $R -s serviceAccountsEnabled=true >/dev/null
+for rol in view-users manage-users; do
+  kc add-roles -r $R --uusername service-account-df-portaal --cclientid realm-management --rolename "$rol" >/dev/null 2>&1 || true
+done
+SCOPE="$(kc get client-scopes -r $R --fields id,name 2>/dev/null | jq -r '.[] | select(.name=="kc-admin-api") | .id')"
+[ -n "$SCOPE" ] && kc update "clients/$ID/default-client-scopes/$SCOPE" -r $R >/dev/null 2>&1
+ok "Het portaal mag inlogaccounts aanmaken en de mail voor wachtwoord en authenticator laten versturen"
+
+# --- Taal, e-mail en 'Wachtwoord vergeten?' -----------------------------------------------
+kc update "realms/$R" -s internationalizationEnabled=true -s 'supportedLocales=["nl","en"]' -s defaultLocale=nl >/dev/null
+SMTP_HOST="$(waarde SMTP_HOST)"
+if [ -n "$SMTP_HOST" ]; then
+  U="$(waarde SMTP_GEBRUIKER)"; AF="$(waarde SMTP_AFZENDER)"; T="$(waarde SMTP_TLS)"
+  # "Naam <adres>" of alleen een adres.
+  VAN="$(sed -n 's/.*<\(.*\)>.*/\1/p' <<<"$AF")"; VAN="${VAN:-$AF}"; VAN="${VAN:-$U}"
+  NAAM="$(sed -n 's/^ *\(.*[^ ]\) *<.*/\1/p' <<<"$AF")"
+  jq -n --arg h "$SMTP_HOST" --arg p "$(waarde SMTP_POORT)" --arg t "${T:-starttls}" --arg u "$U" --arg w "$(waarde SMTP_WACHTWOORD)" \
+    --arg v "$VAN" --arg n "${NAAM:-Datafundament}" \
+    '{resetPasswordAllowed: true, smtpServer: ({host: $h, port: (if $p == "" then "587" else $p end), from: $v, fromDisplayName: $n,
+      ssl: (if $t == "tls" then "true" else "false" end), starttls: (if $t == "starttls" then "true" else "false" end),
+      auth: (if $u == "" then "false" else "true" end)} + (if $u == "" then {} else {user: $u, password: $w} end))}' \
+    | kc update "realms/$R" -f - >/dev/null && ok "E-mail voor Keycloak via $SMTP_HOST; 'Wachtwoord vergeten?' staat aan"
+  # De herstellink toont ook de QR-code opnieuw. De oude koppeling blijft staan
+  # (Remove none): wie halverwege afhaakt, staat dan niet zonder authenticator.
+  RF="$(kc get "realms/$R" --fields resetCredentialsFlow | jq -r '.resetCredentialsFlow // "reset credentials"')"
+  EX="$(kc get "authentication/flows/$(jq -rn --arg f "$RF" '$f|@uri')/executions" -r $R)"
+  RID="$(jq -r '[.[] | select(.providerId == "reset-otp")][0].id // empty' <<<"$EX")"
+  RCFG="$(jq -r '[.[] | select(.providerId == "reset-otp")][0].authenticationConfig // empty' <<<"$EX")"
+  if [ -z "$RID" ]; then
+    waarschuw "De herstelflow '$RF' heeft geen stap 'Reset OTP': de link geeft alleen een nieuw wachtwoord."
+  elif [ -n "$RCFG" ]; then
+    kc update "authentication/config/$RCFG" -r $R -b '{"alias":"df-reset-otp","config":{"action_on_otp_reset_flag":"Remove none"}}' >/dev/null \
+      && ok "De herstellink toont de QR-code opnieuw"
+  else
+    kc create "authentication/executions/$RID/config" -r $R -b '{"alias":"df-reset-otp","config":{"action_on_otp_reset_flag":"Remove none"}}' >/dev/null 2>&1 \
+      && ok "De herstellink toont de QR-code opnieuw"
+  fi
+else
+  kc update "realms/$R" -s resetPasswordAllowed=false >/dev/null
+  waarschuw "Keycloak heeft geen e-mail (SMTP_HOST ontbreekt in compose/.env): geen uitnodigingen, geen 'Wachtwoord vergeten?'."
 fi
 
 # --- Client voor OpenMetadata ----------------------------------------------------------
@@ -159,6 +211,8 @@ else
 fi
 
 # --- Een gebruiker voor jezelf -----------------------------------------------------------
+EMAIL=""
+if [ "${1:-}" != --stil ]; then
 echo
 echo "  Je logt op het portaal in met een Keycloak-gebruiker met een geverifieerd"
 echo "  e-mailadres. Zal ik er een voor je maken?"
@@ -189,6 +243,7 @@ if [ -n "$EMAIL" ]; then
     zet OM_DOMEIN "${EMAIL#*@}"
     ok "Beheerder van OpenMetadata: ${EMAIL%@*}"
   fi
+fi
 fi
 
 # --- Het portaal koppelen ------------------------------------------------------------------

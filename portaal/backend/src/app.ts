@@ -5,6 +5,7 @@ import fastifyCookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import type pg from "pg";
 import type { Config } from "./config.js";
+import { KeycloakBeheer } from "./keycloakbeheer.js";
 import { Koppelingen } from "./koppelingen.js";
 import { Sleutels } from "./sleutels.js";
 import type { Mailer } from "./mail.js";
@@ -48,9 +49,11 @@ export interface Diensten {
   oidc: Oidc | null;
   /** De onderdelen van het platform: Dagster, Lakekeeper, Trino, Garage. */
   koppelingen: Koppelingen;
+  /** Inlogaccounts in Keycloak (uitnodigen, herstel); null als dat niet is ingesteld. */
+  keycloak: KeycloakBeheer | null;
 }
 
-export type DienstenInvoer = Omit<Diensten, "sleutels" | "nu" | "mailer" | "oidc" | "koppelingen"> & Partial<Pick<Diensten, "nu" | "mailer" | "oidc" | "koppelingen">>;
+export type DienstenInvoer = Omit<Diensten, "sleutels" | "nu" | "mailer" | "oidc" | "koppelingen" | "keycloak"> & Partial<Pick<Diensten, "nu" | "mailer" | "oidc" | "koppelingen" | "keycloak">>;
 
 declare module "fastify" {
   interface FastifyInstance {
@@ -91,6 +94,10 @@ export async function bouwApp(diensten: DienstenInvoer, routes: ((app: FastifyIn
     koppelingen: diensten.koppelingen ?? new Koppelingen(diensten.config.koppelingen),
     mailer: diensten.mailer ?? { verstuur: async () => {} },
     oidc: diensten.oidc ?? null,
+    keycloak: diensten.keycloak !== undefined ? diensten.keycloak
+      : diensten.config.oidc && diensten.config.keycloakIntern
+        ? new KeycloakBeheer(diensten.config.oidc.issuer, diensten.config.oidc.clientId, diensten.config.oidc.clientSecret, diensten.config.keycloakIntern)
+        : null,
   });
   app.decorateRequest("persoon", null);
 
