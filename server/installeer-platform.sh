@@ -201,6 +201,9 @@ docker compose run --rm --no-deps -T \
 
 meld "De rest: Trino, Dagster, Keycloak, portaal, OpenMetadata, Caddy"
 docker compose up -d --remove-orphans
+# Caddy en Trino krijgen losse configuratiebestanden. Na een git pull is dat een nieuw
+# bestand, dat een draaiende container niet ziet: herstarten, dan lezen ze het opnieuw.
+docker compose restart caddy trino >/dev/null
 ok "Alles draait. Caddy haalt bij de eerste aanvraag per naam een certificaat op."
 
 if [ -z "$(waarde PORTAAL_OIDC_GEHEIM)" ] || [ -z "$(waarde OM_OIDC_GEHEIM)" ] || [ -z "$(waarde TRINO_OIDC_GEHEIM)" ]; then
